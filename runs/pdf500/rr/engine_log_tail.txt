@@ -1,0 +1,40 @@
+
+            Copyright (c) 2026 Aparavi Software AG
+                    All rights reserved
+    
+INFO:     Started server process [1]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://localhost:5565 (Press CTRL+C to quit)
+INFO:     127.0.0.1:33346 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51786 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51798 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51808 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51810 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51816 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51830 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51846 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:57482 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:47024 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:47034 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:47044 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:47054 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:47062 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:47070 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:47080 - "WebSocket /task/service" [accepted]
+INFO:     connection open

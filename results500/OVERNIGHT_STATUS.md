@@ -29,3 +29,28 @@
   circularity recorded in frozen_params.json, applied as written).
   PREDICTIONS_PDF500.md committed. Pre-flight complete; STOPPED for
   operator report before the shot per instruction.
+- **12:05** GO received. Arm order: RR first, then LG (fixed choice,
+  recorded). INTERPRETATION CALL: wedge detection runs IN-DRIVER (the
+  driver knows completions and in-flight precisely; 300 s no-progress);
+  the host-side mtime watchdog remains as a 10-min backstop for a dead
+  driver. Clean restart + warm before each arm, as in calibration.
+- **12:25** RR SHOT COMPLETE: 0/500 completed. Wedge #1 at 0 records on
+  attempt 1 (clean engine, successful warmup); relaunch per protocol
+  (reap + fresh pool + successful warmup); wedge #2 at 0 records on
+  attempt 2; arm stopped. Census reconciled 500=500, all wedge_affected.
+  Diagnostics: backend at 4.7 GB RSS / 273 threads at wedge (vs ~0.6 GB
+  normal) + defunct jspawnhelper — memory/thread blowup under concurrent
+  admission is the freeze mechanism. Span 625 s. P1 was DIRECTIONALLY
+  right but optimistic (predicted ≲80 completions; actual 0). P4
+  confirmed, onset earlier than predicted bound.
+- **12:27** LG shot starting: clean restart, prime, samplers, open-loop
+  500 @ frozen 107.6 s timeout.
+- **12:40** LG SHOT COMPLETE: protocol census 0/500 (all client timeouts at
+  frozen 107.6 s) — but server-side telemetry shows ~61 docs completed
+  in-window at 17.94 avg cores; the frozen formula, not the server, set the
+  zero. RR/LG zeros have opposite causes; report distinguishes them.
+- **12:45** Post-run validation complete: reconciliation ✓, drift ✓,
+  samplers gap-free ✓, duplicates none ✓, gates vacuous (0 completions,
+  reported as such), predictions scored (P1 directional / P2 refuted-as-
+  stated-risk-realized / P3 inconclusive / P4 confirmed-stronger).
+  REPORT_PDF500.md written. Final commit follows.

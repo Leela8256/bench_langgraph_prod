@@ -1,0 +1,15 @@
+  PID   RSS NLWP COMMAND
+    1 195996  25 ./engine /opt/rocketride/engine/ai/eaas.py
+   76 23744    1 python /tmp/proc_sampler.py
+  109 84248    2 python /work/rr_shot.py /work/corpus /work/out/pdf500_shot 1500 500
+  561     0    1 [jspawnhelper] <defunct>
+  562     0    1 [jspawnhelper] <defunct>
+ 1400     0    1 [pkill] <defunct>
+ 1408 4425856 272 /opt/rocketride/engine/engine /opt/rocketride/engine/ai/node.py /tmp/task-7cf62226.webhook_1-ktzz0whr.json --autoterm --monitor=app --debug_port=20000 --debug_host=localhost --data_port=20001 --data_host=localhost
+ 1825     0    1 [jspawnhelper] <defunct>
+ 1826  4352    1 /opt/rocketride/engine/java/jre/lib/jspawnhelper 17.0.19+10 178:180:182
+ 2685  3124    1 sh -c ps ax -o pid,rss,nlwp,args | head -30; free -m | head -2
+ 2686  6596    1 ps ax -o pid,rss,nlwp,args
+ 2687  3172    1 head -30
+               total        used        free      shared  buff/cache   available
+Mem:           21730        5964         976           0       15085       15765

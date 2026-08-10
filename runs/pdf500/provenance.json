@@ -1,0 +1,59 @@
+{
+ "captured_at": "2026-08-10T19:10:00Z (PDF-500 shot)",
+ "host": {
+  "model": "Apple M5 Pro",
+  "cores": 18,
+  "ram_gb": 24,
+  "docker_vm": "18 vCPU / 21.2 GB",
+  "os": "26.5.2"
+ },
+ "emulation": "linux/amd64 images on arm64 host \u2014 ALL timings relative-comparison-only",
+ "containers": {
+  "cpus": 12,
+  "memory_gb": 10
+ },
+ "images": {
+  "langgraph": "sha256:dc7ebd9881cbafc2133cde316dede9401e30e3d58702c47536420db49324a041",
+  "rocketride": "sha256:55372941b35587a0c56390e0ce9f7c89ab6b098d7aede6957aad053654d8a9ee"
+ },
+ "corpus_manifest_sha256": "7d7d90245a6b906e8412ad0395594b42f10a071e93e99c68b799f143f03a78ed",
+ "lg_versions": {
+  "fastapi": "0.141.1",
+  "langchain-text-splitters": "1.1.2",
+  "langgraph": "1.2.10",
+  "numpy": "2.5.1",
+  "pypdf": "6.15.0",
+  "sentence-transformers": "5.7.0",
+  "torch": "2.13.0",
+  "transformers": "5.14.1",
+  "uvicorn": "0.52.1"
+ },
+ "lg_python": "Python 3.12.13",
+ "rr_versions": {
+  "engine_binary_sha256": "cf1fbf9ce72d15fef0257daaf0bfef130a263535be08c7160a0e0dada0371316",
+  "sdk": "1.3.0"
+ },
+ "hf_model_revision": "b207367332321f8e44f96e224ef15bc607f4dbf0",
+ "lg_dispatch_note": "async FastAPI endpoint; graph nodes are async functions calling sync workload code directly on the event loop; single uvicorn worker. No Send fanout: per-doc HTTP requests. Provenance only, not a claim.",
+ "omp_pins": "OMP/MKL/OPENBLAS_NUM_THREADS=1, TOKENIZERS_PARALLELISM=false (both arms' LG-side; RR engine internal threading is its default)",
+ "frozen": {
+  "formula": "max(60s, calibration p99 x 5) per arm \u2014 FROZEN before the shot",
+  "lg_cal_p99_s": 21.52,
+  "lg_timeout_s": 107.6,
+  "rr_cal_p99_s": 300.0,
+  "rr_timeout_s": 1500.0,
+  "rr_circularity_note": "RR cal p99 IS the 300s provisional cap (28/50 docs timed out in a c4 wedge), so the frozen value is 5x the cap, not 5x an observed latency. Formula applied as written; circularity recorded, not corrected.",
+  "containers": {
+   "cpus": 12,
+   "memory_gb": 10
+  },
+  "offered_load": 500,
+  "pool_size": 8
+ },
+ "git_commits": [
+  "3c8b9d8 PDF-500 pre-flight: probes green, calibrations done (RR wedged @c4), timeouts frozen, predictions committed",
+  "b0d2523 Initial commit: benchmark harness, handoffs, results through PDF-200 sequential run"
+ ],
+ "corpus_manifest_sha256_500": "8a00cb14eab3387b57cacb73b7e1c60d6eafde9e7b96401614585aa7824ae006",
+ "arm_order": "RR first, then LG (fixed, recorded)"
+}
