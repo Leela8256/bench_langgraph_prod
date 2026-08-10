@@ -11,7 +11,7 @@
 # NOTE: on an arm64 host both run emulated. Correctness only — no timing
 # produced here is ever reportable.
 
-# PDF-1K preregistered allocation (2026-08-08): 12 CPU / 12 GB per arm.
+# PDF-500 preregistered allocation (2026-08-10): 12 CPU / 10 GB per arm.
 # Host: Apple M5 Pro, 18 cores / 24 GB; Docker VM 18 vCPU / 21.2 GB.
 # 12+12 oversubscribes the VM only if both arms ran at once — the protocol
 # runs arms one at a time within a rep. Do not tune after seeing results.
@@ -20,7 +20,7 @@ x-resources: &resources
     resources:
       limits:
         cpus: "12.0"
-        memory: 12g
+        memory: 10g
       reservations:
         memory: 1g
 

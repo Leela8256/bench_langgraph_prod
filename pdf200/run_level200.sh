@@ -16,7 +16,7 @@ if [ "$ARM" = lg ]; then
   DRIVER=$!
   WATCH_FILE="$OUT/per_doc.jsonl"
 else
-  CDIR="/work/out/$(basename "$(dirname "$OUT")")_L$LEVEL"
+  CDIR="/work/out/$(basename "$(dirname "$OUT")")_$(basename "$OUT")_L$LEVEL"
   docker exec prodbench-rocketride sh -c "mkdir -p $CDIR"
   docker exec prodbench-rocketride python /work/rr_stepped.py \
     /work/corpus "$CDIR" "$LEVEL" "$TIMEOUT" "$N" \

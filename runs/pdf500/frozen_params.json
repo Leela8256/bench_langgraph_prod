@@ -1,0 +1,14 @@
+{
+ "formula": "max(60s, calibration p99 x 5) per arm \u2014 FROZEN before the shot",
+ "lg_cal_p99_s": 21.52,
+ "lg_timeout_s": 107.6,
+ "rr_cal_p99_s": 300.0,
+ "rr_timeout_s": 1500.0,
+ "rr_circularity_note": "RR cal p99 IS the 300s provisional cap (28/50 docs timed out in a c4 wedge), so the frozen value is 5x the cap, not 5x an observed latency. Formula applied as written; circularity recorded, not corrected.",
+ "containers": {
+  "cpus": 12,
+  "memory_gb": 10
+ },
+ "offered_load": 500,
+ "pool_size": 8
+}
