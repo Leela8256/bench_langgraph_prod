@@ -63,6 +63,19 @@ script), `results200/REPORT_PDF200.md`, `runs/pdf200/rep1-{rr,lg}/`.
 
 ## 4. Findings not yet written down anywhere
 
+
+> **ATTRIBUTION CAVEAT (added 2026-08-10, after operator challenge):** every
+> wedge observation in this project occurred under x86-on-ARM emulation.
+> The stuck-jspawnhelper + livelock signature is consistent BOTH with a
+> product defect AND with known emulation pathologies (fork/exec of a
+> ~300-thread translated process; lock-contention degradation under
+> translation). Wedge findings are therefore "reproducible in this
+> environment," NOT attributed to the product, until reproduced on a native
+> Linux x64 host. RocketRide ships no linux-arm64 build, so no fair native
+> containerized comparison exists on Apple Silicon. The deterministic
+> per-doc empty-result failures (000164/000357) are likely attribution-safe
+> (clean responses, not stress behavior) but also deserve native retest.
+
 ### 4.1 The wedge is NOT a poison-document property — correction to my earlier claim
 
 I previously described `000163.pdf` as a poison document because the Aug 7 run

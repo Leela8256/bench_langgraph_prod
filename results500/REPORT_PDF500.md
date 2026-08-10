@@ -12,6 +12,19 @@ git: pre-flight `3c8b9d8`, this report committed post-run.
 > is comparable (the async-node image no longer exists). Single shot — no
 > repeatability claims.
 
+
+> **ATTRIBUTION CAVEAT (added 2026-08-10, after operator challenge):** every
+> wedge observation in this project occurred under x86-on-ARM emulation.
+> The stuck-jspawnhelper + livelock signature is consistent BOTH with a
+> product defect AND with known emulation pathologies (fork/exec of a
+> ~300-thread translated process; lock-contention degradation under
+> translation). Wedge findings are therefore "reproducible in this
+> environment," NOT attributed to the product, until reproduced on a native
+> Linux x64 host. RocketRide ships no linux-arm64 build, so no fair native
+> containerized comparison exists on Apple Silicon. The deterministic
+> per-doc empty-result failures (000164/000357) are likely attribution-safe
+> (clean responses, not stress behavior) but also deserve native retest.
+
 ## Headline
 
 **Under a 500-document open-loop burst, the protocol census is 0/500
@@ -23,7 +36,7 @@ entire finding:**
 | protocol census | **0 / 500** | **0 / 500** |
 | failure reason (all 500) | `wedge_affected` | client `timeout` at frozen 107.6 s |
 | **server-side completions during the shot** | **0** (engine frozen) | **~61** (62 POST-200s incl. prime, steady processing) |
-| what actually broke | **the product**: engine livelocked twice | **the protocol**: frozen timeout < queueing delay |
+| what actually broke | **the engine livelocked twice** (product vs emulation attribution OPEN — see caveat) | **the protocol**: frozen timeout < queueing delay |
 | census reconciliation | 500 = 500, unique ✓ | 500 = 500, unique ✓ |
 
 ### RocketRide: two wedges, zero output, full burn
@@ -47,7 +60,8 @@ below is the *client's* deadline, not a server signal.
 Recovery did not help: the relaunch protocol (reap + fresh pool + verified
 warmup) restored a working engine — which then froze again the moment the
 remaining 500 were offered. Capacity under uncapped concurrent admission is
-effectively **zero**, reproducibly.
+effectively **zero, reproducibly, in this emulated environment** (native
+attribution open — see caveat).
 
 ### LangGraph: the server worked; the frozen protocol disqualified it
 

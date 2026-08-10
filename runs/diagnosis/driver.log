@@ -1,0 +1,4 @@
+[rr] warmup ok: 8 slots
+[rr L4] 25/50
+[rr L4] 50/50
+{"kind": "level_meta", "arm": "rocketride", "level": 4, "n_docs": 50, "pool": 8, "level_span_s": 228.006428438}

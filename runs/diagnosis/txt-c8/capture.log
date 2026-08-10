@@ -1,0 +1,2 @@
+[diag 15:12:01] clean restart
+[diag 15:12:17] rr healthy; launching /work/txt100 c8 x100 (timeout 120s)

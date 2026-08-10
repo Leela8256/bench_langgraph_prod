@@ -54,3 +54,10 @@
   reported as such), predictions scored (P1 directional / P2 refuted-as-
   stated-risk-realized / P3 inconclusive / P4 confirmed-stronger).
   REPORT_PDF500.md written. Final commit follows.
+- **15:20** Operator challenge accepted: emulation may CAUSE the wedge, not
+  just distort timings (no linux-arm64 build exists; we run linux-x64
+  emulated). Attribution caveat added to REPORT_PDF500, RESULTS_SEQ200,
+  CONTEXT_SNAPSHOT. Diagnosis experiments running: instrumented c4 PDF
+  repro DID NOT wedge this time (44/50 ok — nondeterminism now observed in
+  both directions, consistent with an environmental/racy mechanism);
+  discriminating pair in flight: txt-c8 (no Tika/JVM) vs pdf-c8 (Tika).
