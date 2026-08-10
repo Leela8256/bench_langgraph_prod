@@ -1,0 +1,22 @@
+[03:08:02] rep start arm=rr n=100 timeout=900s
+[03:08:16] containers healthy: lg=healthy rr=healthy
+[03:08:16] samplers on (host=99042 container=99054)
+document      : /work/corpus/000009.pdf
+bytes         : 39586
+sha256        : 3fcfd899850be006b2d6616f8161e49479bc41424fa80e404f41233b77256ff3
+connected     : True -> ws://127.0.0.1:5565/task/service
+token         : tk_601cf9ad00af8f4436bbb8707e78ba30
+wall (shape)  : 1.572s   <- emulated, never reportable
+chunks        : 10
+chunk lengths : [3675, 3419, 3975, 3770, 3755, 3652, 3971, 3151, 3602, 2544]
+total chars   : 35514
+vector dim    : 384
+vector L2norm : 1.00000001
+embed model   : sentence-transformers/multi-qa-MiniLM-L6-cos-v1
+first 4 vals  : [0.072071, 0.060635, 0.015225, -0.003297]
+concat sha256 : ce4d0eb289d5d5373d1b17ca1bba06b132751336a2ee1f6c16e7516cd4a1af8b
+[03:08:34] prime ok
+[03:08:34] prime done; burst begins
+[05:39:55] WATCHDOG: no progress for 10 min at 0/100 — killing rep
+[05:39:55] burst over: rc=0 records=0 invalid_by_watchdog=1
+[05:39:55] validation: {"arm": "rr", "n_records": 0, "n_expected": 100, "all_returned": false, "ids_unique": true, "n_ok": 0, "dims_ok": true, "finite_ok": true, "norms_ok": true, "baseline_written": true, "valid": false}

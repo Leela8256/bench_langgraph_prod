@@ -1,0 +1,5 @@
+[lg-burst] 25 done
+[lg-burst] 50 done
+[lg-burst] 75 done
+[lg-burst] 100 done
+{"kind": "client_meta", "arm": "langgraph", "n_docs": 100, "send_window_task_creation_s": 0.000103583, "batch_span_s": 60.981580542, "client_cpu_user_s": 0.3, "client_cpu_sys_s": 0.11, "client_maxrss_mb": 104.2, "note": "send window = asyncio task creation; actual socket writes interleave with responses under the single event loop"}

@@ -1,0 +1,5 @@
+[05:39:55] rep start arm=lg n=1000 timeout=304.8s
+[05:55:42] containers healthy: lg=healthy rr=healthy
+[05:55:42] samplers on (host=5323 container=5335)
+prime http=200
+[05:55:44] prime done; burst begins

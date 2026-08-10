@@ -1,0 +1,77 @@
+# Both benchmark arms, same architecture, same resource envelope.
+#
+# The resource limits are the point: a benchmark comparing two frameworks is
+# meaningless unless both get identical CPU and memory. Change them only in
+# pairs, and record the change alongside any results.
+#
+#   docker compose up -d              # both arms
+#   docker compose run --rm rocketride probe
+#   docker compose down
+#
+# NOTE: on an arm64 host both run emulated. Correctness only — no timing
+# produced here is ever reportable.
+
+# PDF-1K preregistered allocation (2026-08-08): 12 CPU / 12 GB per arm.
+# Host: Apple M5 Pro, 18 cores / 24 GB; Docker VM 18 vCPU / 21.2 GB.
+# 12+12 oversubscribes the VM only if both arms ran at once — the protocol
+# runs arms one at a time within a rep. Do not tune after seeing results.
+x-resources: &resources
+  deploy:
+    resources:
+      limits:
+        cpus: "12.0"
+        memory: 12g
+      reservations:
+        memory: 1g
+
+services:
+  langgraph:
+    build:
+      context: ./langgraph-fastapi
+      dockerfile: Dockerfile
+    image: prodbench-langgraph:latest
+    platform: linux/amd64
+    container_name: prodbench-langgraph
+    <<: *resources
+    environment:
+      PIPELINES: document-pdf-v1
+      # One worker is the deployment shape, not a default.
+      EXECUTOR_WORKERS: "4"
+      MAX_INFLIGHT_REQUESTS: "8"
+      REQUEST_TIMEOUT_SECONDS: "300"
+      TORCH_THREADS: "1"
+      TORCH_INTEROP_THREADS: "1"
+      MAX_UPLOAD_BYTES: "104857600"
+      HF_HUB_OFFLINE: "1"
+    ports:
+      - "8100:8100"
+    healthcheck:
+      # /health/ready is warm-up gated: unhealthy until the graph has run once.
+      test: ["CMD", "python", "-c",
+             "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8100/health/ready',timeout=3).status==200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  rocketride:
+    build:
+      context: ./rocketride
+      dockerfile: Dockerfile
+    image: prodbench-rocketride:latest
+    platform: linux/amd64
+    container_name: prodbench-rocketride
+    <<: *resources
+    environment:
+      ROCKETRIDE_URI: ws://127.0.0.1:5565/task/service
+      ROCKETRIDE_APIKEY: local-dev
+      OMP_NUM_THREADS: "1"   # PDF-200 fairness pin, recorded both arms
+    ports:
+      - "5565:5565"
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import socket,sys; s=socket.socket(); s.settimeout(3); sys.exit(s.connect_ex(('127.0.0.1',5565)))"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s

@@ -1,0 +1,11 @@
+.rocketride/
+datasets/
+results/raw*
+results_rr/
+# venvs / caches (added at git init, PDF-500 pre-flight)
+.venv/
+.rrclient/
+__pycache__/
+*.pyc
+.pytest_cache/
+langgraph-fastapi/.venv/

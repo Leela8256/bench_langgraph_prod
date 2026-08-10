@@ -1,0 +1,23 @@
+{
+ "tokens_same": true,
+ "engine_procs": {
+  "before": 1,
+  "after_use_1": 2,
+  "after_use_3": 2
+ },
+ "engine_threads": {
+  "before": 27,
+  "after_use_1": 229,
+  "after_use_3": 229,
+  "one_pipeline_instance_threads_observed": 202
+ },
+ "shared_instance": true,
+ "pool_size": 8,
+ "note": "shared pipeline instance -> pool 8; server footprint is default RocketRide, threadCount 64 (configured); 202 threads observed for the single instance",
+ "lg": {
+  "serving_layer": "library behind minimal FastAPI wrapper (uvicorn 1 worker, defaults)",
+  "os_cpu_count_in_container": 18,
+  "default_executor_width": 22,
+  "dispatch": "sync nodes -> asyncio default ThreadPoolExecutor"
+ }
+}

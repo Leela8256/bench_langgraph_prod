@@ -1,0 +1,501 @@
+p01l01 pipeline document extraction benchmark vector embedding chunk latency
+
+p01l02 latency throughput deterministic parser corpus token overlap splitter
+
+p01l03 splitter engine component lane transform ingestion retrieval semantic
+
+p01l04 semantic index harness measurement provenance reference canonical envelope
+
+p01l05 envelope contract adapter pipeline document extraction benchmark vector
+
+p01l06 vector embedding chunk latency throughput deterministic parser corpus
+
+p01l07 corpus token overlap splitter engine component lane transform
+
+p01l08 transform ingestion retrieval semantic index harness measurement provenance
+
+p01l09 provenance reference canonical envelope contract adapter pipeline document
+
+p01l10 document extraction benchmark vector embedding chunk latency throughput
+
+p01l11 throughput deterministic parser corpus token overlap splitter engine
+
+p01l12 engine component lane transform ingestion retrieval semantic index
+
+p01l13 index harness measurement provenance reference canonical envelope contract
+
+p01l14 contract adapter pipeline document extraction benchmark vector embedding
+
+p01l15 embedding chunk latency throughput deterministic parser corpus token
+
+p01l16 token overlap splitter engine component lane transform ingestion
+
+p01l17 ingestion retrieval semantic index harness measurement provenance reference
+
+p01l18 reference canonical envelope contract adapter pipeline document extraction
+
+p01l19 extraction benchmark vector embedding chunk latency throughput deterministic
+
+p01l20 deterministic parser corpus token overlap splitter engine component
+
+p01l21 component lane transform ingestion retrieval semantic index harness
+
+p01l22 harness measurement provenance reference canonical envelope contract adapter
+
+p01l23 adapter pipeline document extraction benchmark vector embedding chunk
+
+p01l24 chunk latency throughput deterministic parser corpus token overlap
+
+p01l25 overlap splitter engine component lane transform ingestion retrieval
+
+p01l26 retrieval semantic index harness measurement provenance reference canonical
+
+p01l27 canonical envelope contract adapter pipeline document extraction benchmark
+
+p01l28 benchmark vector embedding chunk latency throughput deterministic parser
+
+p01l29 parser corpus token overlap splitter engine component lane
+
+p01l30 lane transform ingestion retrieval semantic index harness measurement
+
+p01l31 measurement provenance reference canonical envelope contract adapter pipeline
+
+p01l32 pipeline document extraction benchmark vector embedding chunk latency
+
+p01l33 latency throughput deterministic parser corpus token overlap splitter
+
+p01l34 splitter engine component lane transform ingestion retrieval semantic
+
+p01l35 semantic index harness measurement provenance reference canonical envelope
+
+p01l36 envelope contract adapter pipeline document extraction benchmark vector
+
+p01l37 vector embedding chunk latency throughput deterministic parser corpus
+
+p01l38 corpus token overlap splitter engine component lane transform
+
+p01l39 transform ingestion retrieval semantic index harness measurement provenance
+
+p01l40 provenance reference canonical envelope contract adapter pipeline document
+
+
+
+p02l01 document extraction benchmark vector embedding chunk latency throughput
+
+p02l02 throughput deterministic parser corpus token overlap splitter engine
+
+p02l03 engine component lane transform ingestion retrieval semantic index
+
+p02l04 index harness measurement provenance reference canonical envelope contract
+
+p02l05 contract adapter pipeline document extraction benchmark vector embedding
+
+p02l06 embedding chunk latency throughput deterministic parser corpus token
+
+p02l07 token overlap splitter engine component lane transform ingestion
+
+p02l08 ingestion retrieval semantic index harness measurement provenance reference
+
+p02l09 reference canonical envelope contract adapter pipeline document extraction
+
+p02l10 extraction benchmark vector embedding chunk latency throughput deterministic
+p02l09 reference canonical envelope contract adapter pipeline document extraction
+
+p02l10 extraction benchmark vector embedding chunk latency throughput deterministic
+
+p02l11 deterministic parser corpus token overlap splitter engine component
+
+p02l12 component lane transform ingestion retrieval semantic index harness
+
+p02l13 harness measurement provenance reference canonical envelope contract adapter
+
+p02l14 adapter pipeline document extraction benchmark vector embedding chunk
+
+p02l15 chunk latency throughput deterministic parser corpus token overlap
+
+p02l16 overlap splitter engine component lane transform ingestion retrieval
+
+p02l17 retrieval semantic index harness measurement provenance reference canonical
+
+p02l18 canonical envelope contract adapter pipeline document extraction benchmark
+
+p02l19 benchmark vector embedding chunk latency throughput deterministic parser
+
+p02l20 parser corpus token overlap splitter engine component lane
+
+p02l21 lane transform ingestion retrieval semantic index harness measurement
+
+p02l22 measurement provenance reference canonical envelope contract adapter pipeline
+
+p02l23 pipeline document extraction benchmark vector embedding chunk latency
+
+p02l24 latency throughput deterministic parser corpus token overlap splitter
+
+p02l25 splitter engine component lane transform ingestion retrieval semantic
+
+p02l26 semantic index harness measurement provenance reference canonical envelope
+
+p02l27 envelope contract adapter pipeline document extraction benchmark vector
+
+p02l28 vector embedding chunk latency throughput deterministic parser corpus
+
+p02l29 corpus token overlap splitter engine component lane transform
+
+p02l30 transform ingestion retrieval semantic index harness measurement provenance
+
+p02l31 provenance reference canonical envelope contract adapter pipeline document
+
+p02l32 document extraction benchmark vector embedding chunk latency throughput
+
+p02l33 throughput deterministic parser corpus token overlap splitter engine
+
+p02l34 engine component lane transform ingestion retrieval semantic index
+
+p02l35 index harness measurement provenance reference canonical envelope contract
+
+p02l36 contract adapter pipeline document extraction benchmark vector embedding
+
+p02l37 embedding chunk latency throughput deterministic parser corpus token
+
+p02l38 token overlap splitter engine component lane transform ingestion
+
+p02l39 ingestion retrieval semantic index harness measurement provenance reference
+
+p02l40 reference canonical envelope contract adapter pipeline document extraction
+
+
+
+p03l01 extraction benchmark vector embedding chunk latency throughput deterministic
+
+p03l02 deterministic parser corpus token overlap splitter engine component
+
+p03l03 component lane transform ingestion retrieval semantic index harness
+
+p03l04 harness measurement provenance reference canonical envelope contract adapter
+
+p03l05 adapter pipeline document extraction benchmark vector embedding chunk
+
+p03l06 chunk latency throughput deterministic parser corpus token overlap
+
+p03l07 overlap splitter engine component lane transform ingestion retrieval
+
+p03l08 retrieval semantic index harness measurement provenance reference canonical
+
+p03l09 canonical envelope contract adapter pipeline document extraction benchmark
+
+p03l10 benchmark vector embedding chunk latency throughput deterministic parser
+
+p03l11 parser corpus token overlap splitter engine component lane
+
+p03l12 lane transform ingestion retrieval semantic index harness measurement
+
+p03l13 measurement provenance reference canonical envelope contract adapter pipeline
+
+p03l14 pipeline document extraction benchmark vector embedding chunk latency
+
+p03l15 latency throughput deterministic parser corpus token overlap splitter
+
+p03l16 splitter engine component lane transform ingestion retrieval semantic
+
+p03l17 semantic index harness measurement provenance reference canonical envelope
+
+p03l18 envelope contract adapter pipeline document extraction benchmark vector
+p03l17 semantic index harness measurement provenance reference canonical envelope
+
+p03l18 envelope contract adapter pipeline document extraction benchmark vector
+
+p03l19 vector embedding chunk latency throughput deterministic parser corpus
+
+p03l20 corpus token overlap splitter engine component lane transform
+
+p03l21 transform ingestion retrieval semantic index harness measurement provenance
+
+p03l22 provenance reference canonical envelope contract adapter pipeline document
+
+p03l23 document extraction benchmark vector embedding chunk latency throughput
+
+p03l24 throughput deterministic parser corpus token overlap splitter engine
+
+p03l25 engine component lane transform ingestion retrieval semantic index
+
+p03l26 index harness measurement provenance reference canonical envelope contract
+
+p03l27 contract adapter pipeline document extraction benchmark vector embedding
+
+p03l28 embedding chunk latency throughput deterministic parser corpus token
+
+p03l29 token overlap splitter engine component lane transform ingestion
+
+p03l30 ingestion retrieval semantic index harness measurement provenance reference
+
+p03l31 reference canonical envelope contract adapter pipeline document extraction
+
+p03l32 extraction benchmark vector embedding chunk latency throughput deterministic
+
+p03l33 deterministic parser corpus token overlap splitter engine component
+
+p03l34 component lane transform ingestion retrieval semantic index harness
+
+p03l35 harness measurement provenance reference canonical envelope contract adapter
+
+p03l36 adapter pipeline document extraction benchmark vector embedding chunk
+
+p03l37 chunk latency throughput deterministic parser corpus token overlap
+
+p03l38 overlap splitter engine component lane transform ingestion retrieval
+
+p03l39 retrieval semantic index harness measurement provenance reference canonical
+
+p03l40 canonical envelope contract adapter pipeline document extraction benchmark
+
+
+
+p04l01 benchmark vector embedding chunk latency throughput deterministic parser
+
+p04l02 parser corpus token overlap splitter engine component lane
+
+p04l03 lane transform ingestion retrieval semantic index harness measurement
+
+p04l04 measurement provenance reference canonical envelope contract adapter pipeline
+
+p04l05 pipeline document extraction benchmark vector embedding chunk latency
+
+p04l06 latency throughput deterministic parser corpus token overlap splitter
+
+p04l07 splitter engine component lane transform ingestion retrieval semantic
+
+p04l08 semantic index harness measurement provenance reference canonical envelope
+
+p04l09 envelope contract adapter pipeline document extraction benchmark vector
+
+p04l10 vector embedding chunk latency throughput deterministic parser corpus
+
+p04l11 corpus token overlap splitter engine component lane transform
+
+p04l12 transform ingestion retrieval semantic index harness measurement provenance
+
+p04l13 provenance reference canonical envelope contract adapter pipeline document
+
+p04l14 document extraction benchmark vector embedding chunk latency throughput
+
+p04l15 throughput deterministic parser corpus token overlap splitter engine
+
+p04l16 engine component lane transform ingestion retrieval semantic index
+
+p04l17 index harness measurement provenance reference canonical envelope contract
+
+p04l18 contract adapter pipeline document extraction benchmark vector embedding
+
+p04l19 embedding chunk latency throughput deterministic parser corpus token
+
+p04l20 token overlap splitter engine component lane transform ingestion
+
+p04l21 ingestion retrieval semantic index harness measurement provenance reference
+
+p04l22 reference canonical envelope contract adapter pipeline document extraction
+
+p04l23 extraction benchmark vector embedding chunk latency throughput deterministic
+
+p04l24 deterministic parser corpus token overlap splitter engine component
+
+p04l25 component lane transform ingestion retrieval semantic index harness
+
+p04l26 harness measurement provenance reference canonical envelope contract adapter
+p04l25 component lane transform ingestion retrieval semantic index harness
+
+p04l26 harness measurement provenance reference canonical envelope contract adapter
+
+p04l27 adapter pipeline document extraction benchmark vector embedding chunk
+
+p04l28 chunk latency throughput deterministic parser corpus token overlap
+
+p04l29 overlap splitter engine component lane transform ingestion retrieval
+
+p04l30 retrieval semantic index harness measurement provenance reference canonical
+
+p04l31 canonical envelope contract adapter pipeline document extraction benchmark
+
+p04l32 benchmark vector embedding chunk latency throughput deterministic parser
+
+p04l33 parser corpus token overlap splitter engine component lane
+
+p04l34 lane transform ingestion retrieval semantic index harness measurement
+
+p04l35 measurement provenance reference canonical envelope contract adapter pipeline
+
+p04l36 pipeline document extraction benchmark vector embedding chunk latency
+
+p04l37 latency throughput deterministic parser corpus token overlap splitter
+
+p04l38 splitter engine component lane transform ingestion retrieval semantic
+
+p04l39 semantic index harness measurement provenance reference canonical envelope
+
+p04l40 envelope contract adapter pipeline document extraction benchmark vector
+
+
+
+p05l01 vector embedding chunk latency throughput deterministic parser corpus
+
+p05l02 corpus token overlap splitter engine component lane transform
+
+p05l03 transform ingestion retrieval semantic index harness measurement provenance
+
+p05l04 provenance reference canonical envelope contract adapter pipeline document
+
+p05l05 document extraction benchmark vector embedding chunk latency throughput
+
+p05l06 throughput deterministic parser corpus token overlap splitter engine
+
+p05l07 engine component lane transform ingestion retrieval semantic index
+
+p05l08 index harness measurement provenance reference canonical envelope contract
+
+p05l09 contract adapter pipeline document extraction benchmark vector embedding
+
+p05l10 embedding chunk latency throughput deterministic parser corpus token
+
+p05l11 token overlap splitter engine component lane transform ingestion
+
+p05l12 ingestion retrieval semantic index harness measurement provenance reference
+
+p05l13 reference canonical envelope contract adapter pipeline document extraction
+
+p05l14 extraction benchmark vector embedding chunk latency throughput deterministic
+
+p05l15 deterministic parser corpus token overlap splitter engine component
+
+p05l16 component lane transform ingestion retrieval semantic index harness
+
+p05l17 harness measurement provenance reference canonical envelope contract adapter
+
+p05l18 adapter pipeline document extraction benchmark vector embedding chunk
+
+p05l19 chunk latency throughput deterministic parser corpus token overlap
+
+p05l20 overlap splitter engine component lane transform ingestion retrieval
+
+p05l21 retrieval semantic index harness measurement provenance reference canonical
+
+p05l22 canonical envelope contract adapter pipeline document extraction benchmark
+
+p05l23 benchmark vector embedding chunk latency throughput deterministic parser
+
+p05l24 parser corpus token overlap splitter engine component lane
+
+p05l25 lane transform ingestion retrieval semantic index harness measurement
+
+p05l26 measurement provenance reference canonical envelope contract adapter pipeline
+
+p05l27 pipeline document extraction benchmark vector embedding chunk latency
+
+p05l28 latency throughput deterministic parser corpus token overlap splitter
+
+p05l29 splitter engine component lane transform ingestion retrieval semantic
+
+p05l30 semantic index harness measurement provenance reference canonical envelope
+
+p05l31 envelope contract adapter pipeline document extraction benchmark vector
+
+p05l32 vector embedding chunk latency throughput deterministic parser corpus
+
+p05l33 corpus token overlap splitter engine component lane transform
+
+p05l34 transform ingestion retrieval semantic index harness measurement provenance
+p05l33 corpus token overlap splitter engine component lane transform
+
+p05l34 transform ingestion retrieval semantic index harness measurement provenance
+
+p05l35 provenance reference canonical envelope contract adapter pipeline document
+
+p05l36 document extraction benchmark vector embedding chunk latency throughput
+
+p05l37 throughput deterministic parser corpus token overlap splitter engine
+
+p05l38 engine component lane transform ingestion retrieval semantic index
+
+p05l39 index harness measurement provenance reference canonical envelope contract
+
+p05l40 contract adapter pipeline document extraction benchmark vector embedding
+
+
+
+p06l01 embedding chunk latency throughput deterministic parser corpus token
+
+p06l02 token overlap splitter engine component lane transform ingestion
+
+p06l03 ingestion retrieval semantic index harness measurement provenance reference
+
+p06l04 reference canonical envelope contract adapter pipeline document extraction
+
+p06l05 extraction benchmark vector embedding chunk latency throughput deterministic
+
+p06l06 deterministic parser corpus token overlap splitter engine component
+
+p06l07 component lane transform ingestion retrieval semantic index harness
+
+p06l08 harness measurement provenance reference canonical envelope contract adapter
+
+p06l09 adapter pipeline document extraction benchmark vector embedding chunk
+
+p06l10 chunk latency throughput deterministic parser corpus token overlap
+
+p06l11 overlap splitter engine component lane transform ingestion retrieval
+
+p06l12 retrieval semantic index harness measurement provenance reference canonical
+
+p06l13 canonical envelope contract adapter pipeline document extraction benchmark
+
+p06l14 benchmark vector embedding chunk latency throughput deterministic parser
+
+p06l15 parser corpus token overlap splitter engine component lane
+
+p06l16 lane transform ingestion retrieval semantic index harness measurement
+
+p06l17 measurement provenance reference canonical envelope contract adapter pipeline
+
+p06l18 pipeline document extraction benchmark vector embedding chunk latency
+
+p06l19 latency throughput deterministic parser corpus token overlap splitter
+
+p06l20 splitter engine component lane transform ingestion retrieval semantic
+
+p06l21 semantic index harness measurement provenance reference canonical envelope
+
+p06l22 envelope contract adapter pipeline document extraction benchmark vector
+
+p06l23 vector embedding chunk latency throughput deterministic parser corpus
+
+p06l24 corpus token overlap splitter engine component lane transform
+
+p06l25 transform ingestion retrieval semantic index harness measurement provenance
+
+p06l26 provenance reference canonical envelope contract adapter pipeline document
+
+p06l27 document extraction benchmark vector embedding chunk latency throughput
+
+p06l28 throughput deterministic parser corpus token overlap splitter engine
+
+p06l29 engine component lane transform ingestion retrieval semantic index
+
+p06l30 index harness measurement provenance reference canonical envelope contract
+
+p06l31 contract adapter pipeline document extraction benchmark vector embedding
+
+p06l32 embedding chunk latency throughput deterministic parser corpus token
+
+p06l33 token overlap splitter engine component lane transform ingestion
+
+p06l34 ingestion retrieval semantic index harness measurement provenance reference
+
+p06l35 reference canonical envelope contract adapter pipeline document extraction
+
+p06l36 extraction benchmark vector embedding chunk latency throughput deterministic
+
+p06l37 deterministic parser corpus token overlap splitter engine component
+
+p06l38 component lane transform ingestion retrieval semantic index harness
+
+p06l39 harness measurement provenance reference canonical envelope contract adapter
+
+p06l40 adapter pipeline document extraction benchmark vector embedding chunk

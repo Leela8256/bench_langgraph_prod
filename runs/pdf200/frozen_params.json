@@ -1,0 +1,13 @@
+{
+ "formula": "PROVISIONAL 300s both arms \u2014 calibration stage skipped by user scope cut (single pass, no reps); recorded, not frozen-by-calibration",
+ "lg_timeout_s": 300.0,
+ "rr_timeout_s": 300.0,
+ "levels": [
+  1,
+  4,
+  16,
+  64
+ ],
+ "n_docs": 200,
+ "pool_size": 8
+}

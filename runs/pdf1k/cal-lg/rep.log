@@ -1,0 +1,7 @@
+[03:05:12] rep start arm=lg n=100 timeout=900s
+[03:05:28] containers healthy: lg=healthy rr=healthy
+[03:05:28] samplers on (host=98107 container=98119)
+prime http=200
+[03:05:30] prime done; burst begins
+[03:07:00] burst over: rc=0 records=101 invalid_by_watchdog=0
+[03:07:00] validation: {"arm": "lg", "n_records": 100, "n_expected": 100, "all_returned": true, "ids_unique": true, "n_ok": 100, "dims_ok": true, "finite_ok": true, "norms_ok": true, "gt_hash_mismatches": [], "gt_exact": true, "valid": true, "metrics_emulated_relative_only": {"batch_span_s": 61.0, "batch_throughput_docs_s

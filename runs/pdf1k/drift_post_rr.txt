@@ -1,0 +1,14 @@
+document      : /work/data/probe/parity_fixture.txt
+bytes         : 122
+sha256        : e851210aa2fda06af4a9672e87cb121dc06458a73f9ee4af590b72a9c7b40b83
+connected     : True -> ws://127.0.0.1:5565/task/service
+token         : tk_53f800ee5d817e11612a5ddca128a052
+wall (shape)  : 0.344s   <- emulated, never reportable
+chunks        : 1
+chunk lengths : [122]
+total chars   : 122
+vector dim    : 384
+vector L2norm : 1.00000004
+embed model   : sentence-transformers/multi-qa-MiniLM-L6-cos-v1
+first 4 vals  : [0.003873, 0.028066, 0.06724, 0.068548]
+concat sha256 : e851210aa2fda06af4a9672e87cb121dc06458a73f9ee4af590b72a9c7b40b83
