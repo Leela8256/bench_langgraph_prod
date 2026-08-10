@@ -1,0 +1,466 @@
+[entrypoint] booting RocketRide engine on :5565
+[81MB] Bootstrapping pip...
+[82MB] Installing wheel...
+[82MB] Installing setuptools...
+[82MB] Installing uv...
+[82MB] Rebuilding constraints...
+[82MB] Compiling constraints...
+[82MB] Installing annotated-types, anyio, certifi, charset-normalizer, ...
+[82MB] Using Python 3.12.9 environment at: .
+[82MB] Resolved 20 packages in 847ms
+[82MB] Downloading pydantic-core (2.0MiB)
+[82MB]  Downloaded pydantic-core
+[82MB] Prepared 20 packages in 122ms
+[82MB] Installed 20 packages in 97ms
+[82MB]  + annotated-types==0.8.0
+[82MB]  + anyio==4.14.2
+[82MB]  + certifi==2026.7.22
+[82MB]  + charset-normalizer==3.4.9
+[82MB]  + croniter==6.2.4
+[82MB]  + h11==0.16.0
+[82MB]  + httpcore==1.0.9
+[82MB]  + httpx==0.28.1
+[82MB]  + idna==3.18
+[82MB]  + nvidia-ml-py==13.610.43
+[82MB]  + psutil==7.2.2
+[82MB]  + pydantic==2.12.5
+[82MB]  + pydantic-core==2.41.5
+[82MB]  + python-dateutil==2.9.0.post0
+[82MB]  + requests==2.34.2
+[82MB]  + six==1.17.0
+[82MB]  + tenacity==9.1.4
+[82MB]  + typing-extensions==4.16.0
+[82MB]  + typing-inspection==0.4.3
+[82MB]  + urllib3==2.7.0
+[83MB] Installing aiofiles, annotated-doc, click, fastapi, ...
+[83MB] Using Python 3.12.9 environment at: .
+[83MB] Resolved 17 packages in 700ms
+[83MB] Prepared 9 packages in 86ms
+[83MB] Installed 9 packages in 67ms
+[83MB]  + aiofiles==24.1.0
+[83MB]  + annotated-doc==0.0.5
+[83MB]  + click==8.4.2
+[83MB]  + fastapi==0.141.1
+[83MB]  + python-dotenv==1.2.2
+[83MB]  + python-multipart==0.0.32
+[83MB]  + starlette==1.6.0
+[83MB]  + uvicorn==0.52.1
+[83MB]  + websockets==16.1.1
+[115MB] Installing greenlet, json5, numpy, rank-bm25, ...
+[115MB] Using Python 3.12.9 environment at: .
+[115MB] Resolved 7 packages in 354ms
+[115MB] Downloading sqlalchemy (3.2MiB)
+[115MB] Downloading numpy (15.9MiB)
+[115MB]  Downloaded sqlalchemy
+[115MB]  Downloaded numpy
+[115MB] Prepared 6 packages in 448ms
+[115MB] Installed 6 packages in 36ms
+[115MB]  + greenlet==3.5.5
+[115MB]  + json5==0.10.0
+[115MB]  + numpy==2.5.2
+[115MB]  + rank-bm25==0.2.2
+[115MB]  + restrictedpython==8.4
+[115MB]  + sqlalchemy==2.0.51
+[120MB] Installing debugpy
+[120MB] Using Python 3.12.9 environment at: .
+[120MB] Resolved 1 package in 349ms
+[120MB] Downloading debugpy (3.8MiB)
+[120MB]  Downloaded debugpy
+[120MB] Prepared 1 package in 188ms
+[120MB] Installed 1 package in 22ms
+[120MB]  + debugpy==1.8.21
+
+        _____            _        _   _____  _     _
+       |  __ \          | |      | | |  __ \(_)   | |
+       | |__) |___   ___| | _____| |_| |__) |_  __| | ___
+       |  _  // _ \ / __| |/ / _ \ __|  _  /| |/ _` |/ _ \
+       | | \ \ (_) | (__|   <  __/ |_| | \ \| | (_| |  __/
+       |_|  \_\___/ \___|_|\_\___|\__|_|  \_\_|\__,_|\___|
+
+
+            Copyright (c) 2026 Aparavi Software AG
+                    All rights reserved
+    
+INFO:     Started server process [1]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://localhost:5565 (Press CTRL+C to quit)
+INFO:     127.0.0.1:48340 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:50420 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:50434 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:50446 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:50452 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:50462 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:50472 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:50478 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [1]
+Traceback (most recent call last):
+  File "/opt/rocketride/engine/ai/eaas.py", line 178, in <module>
+    main()
+  File "/opt/rocketride/engine/ai/eaas.py", line 172, in main
+    asyncio.run(run())
+  File "/opt/rocketride/engine/lib/python3.12/asyncio/runners.py", line 195, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/opt/rocketride/engine/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/rocketride/engine/lib/python3.12/asyncio/base_events.py", line 691, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/opt/rocketride/engine/ai/eaas.py", line 166, in run
+    await server.serve()
+  File "/opt/rocketride/engine/ai/web/server.py", line 978, in serve
+    await self.server.serve()
+  File "/opt/rocketride/engine/lib/python3.12/site-packages/uvicorn/server.py", line 80, in serve
+    with self.capture_signals():
+         ^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/rocketride/engine/lib/python3.12/contextlib.py", line 144, in __exit__
+    next(self.gen)
+  File "/opt/rocketride/engine/lib/python3.12/site-packages/uvicorn/server.py", line 335, in capture_signals
+    signal.signal(sig, handler)
+  File "/opt/rocketride/engine/lib/python3.12/signal.py", line 58, in signal
+    handler = _signal.signal(_enum_to_int(signalnum), _enum_to_int(handler))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: signal handler must be signal.SIG_IGN, signal.SIG_DFL, or a callable object
+[136MB] Exit: Python (ap:0x3c) init.cpp:536
+        Message: Python error 1
+[entrypoint] booting RocketRide engine on :5565
+
+        _____            _        _   _____  _     _
+       |  __ \          | |      | | |  __ \(_)   | |
+       | |__) |___   ___| | _____| |_| |__) |_  __| | ___
+       |  _  // _ \ / __| |/ / _ \ __|  _  /| |/ _` |/ _ \
+       | | \ \ (_) | (__|   <  __/ |_| | \ \| | (_| |  __/
+       |_|  \_\___/ \___|_|\_\___|\__|_|  \_\_|\__,_|\___|
+
+
+            Copyright (c) 2026 Aparavi Software AG
+                    All rights reserved
+    
+INFO:     Started server process [1]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://localhost:5565 (Press CTRL+C to quit)
+INFO:     127.0.0.1:56084 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52056 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52066 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52074 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52088 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52094 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52110 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52118 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     Shutting down
+INFO:     Waiting for background tasks to complete. (CTRL+C to force quit)
+[entrypoint] booting RocketRide engine on :5565
+
+        _____            _        _   _____  _     _
+       |  __ \          | |      | | |  __ \(_)   | |
+       | |__) |___   ___| | _____| |_| |__) |_  __| | ___
+       |  _  // _ \ / __| |/ / _ \ __|  _  /| |/ _` |/ _ \
+       | | \ \ (_) | (__|   <  __/ |_| | \ \| | (_| |  __/
+       |_|  \_\___/ \___|_|\_\___|\__|_|  \_\_|\__,_|\___|
+
+
+            Copyright (c) 2026 Aparavi Software AG
+                    All rights reserved
+    
+INFO:     Started server process [1]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://localhost:5565 (Press CTRL+C to quit)
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [1]
+Traceback (most recent call last):
+  File "/opt/rocketride/engine/ai/eaas.py", line 178, in <module>
+    main()
+  File "/opt/rocketride/engine/ai/eaas.py", line 172, in main
+    asyncio.run(run())
+  File "/opt/rocketride/engine/lib/python3.12/asyncio/runners.py", line 195, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/opt/rocketride/engine/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/rocketride/engine/lib/python3.12/asyncio/base_events.py", line 691, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/opt/rocketride/engine/ai/eaas.py", line 166, in run
+    await server.serve()
+  File "/opt/rocketride/engine/ai/web/server.py", line 978, in serve
+    await self.server.serve()
+  File "/opt/rocketride/engine/lib/python3.12/site-packages/uvicorn/server.py", line 80, in serve
+    with self.capture_signals():
+         ^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/rocketride/engine/lib/python3.12/contextlib.py", line 144, in __exit__
+    next(self.gen)
+  File "/opt/rocketride/engine/lib/python3.12/site-packages/uvicorn/server.py", line 335, in capture_signals
+    signal.signal(sig, handler)
+  File "/opt/rocketride/engine/lib/python3.12/signal.py", line 58, in signal
+    handler = _signal.signal(_enum_to_int(signalnum), _enum_to_int(handler))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: signal handler must be signal.SIG_IGN, signal.SIG_DFL, or a callable object
+[114MB] Exit: Python (ap:0x3c) init.cpp:536
+        Message: Python error 1
+[entrypoint] booting RocketRide engine on :5565
+
+        _____            _        _   _____  _     _
+       |  __ \          | |      | | |  __ \(_)   | |
+       | |__) |___   ___| | _____| |_| |__) |_  __| | ___
+       |  _  // _ \ / __| |/ / _ \ __|  _  /| |/ _` |/ _ \
+       | | \ \ (_) | (__|   <  __/ |_| | \ \| | (_| |  __/
+       |_|  \_\___/ \___|_|\_\___|\__|_|  \_\_|\__,_|\___|
+
+
+            Copyright (c) 2026 Aparavi Software AG
+                    All rights reserved
+    
+INFO:     Started server process [1]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://localhost:5565 (Press CTRL+C to quit)
+INFO:     127.0.0.1:33346 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51786 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51798 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51808 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51810 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51816 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51830 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51846 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:57482 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:47024 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:47034 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:47044 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:47054 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:47062 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:47070 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:47080 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     Shutting down
+INFO:     Waiting for background tasks to complete. (CTRL+C to force quit)
+[entrypoint] booting RocketRide engine on :5565
+
+        _____            _        _   _____  _     _
+       |  __ \          | |      | | |  __ \(_)   | |
+       | |__) |___   ___| | _____| |_| |__) |_  __| | ___
+       |  _  // _ \ / __| |/ / _ \ __|  _  /| |/ _` |/ _ \
+       | | \ \ (_) | (__|   <  __/ |_| | \ \| | (_| |  __/
+       |_|  \_\___/ \___|_|\_\___|\__|_|  \_\_|\__,_|\___|
+
+
+            Copyright (c) 2026 Aparavi Software AG
+                    All rights reserved
+    
+INFO:     Started server process [1]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://localhost:5565 (Press CTRL+C to quit)
+INFO:     127.0.0.1:59622 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [1]
+Traceback (most recent call last):
+  File "/opt/rocketride/engine/ai/eaas.py", line 178, in <module>
+    main()
+  File "/opt/rocketride/engine/ai/eaas.py", line 172, in main
+    asyncio.run(run())
+  File "/opt/rocketride/engine/lib/python3.12/asyncio/runners.py", line 195, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/opt/rocketride/engine/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/rocketride/engine/lib/python3.12/asyncio/base_events.py", line 691, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/opt/rocketride/engine/ai/eaas.py", line 166, in run
+    await server.serve()
+  File "/opt/rocketride/engine/ai/web/server.py", line 978, in serve
+    await self.server.serve()
+  File "/opt/rocketride/engine/lib/python3.12/site-packages/uvicorn/server.py", line 80, in serve
+    with self.capture_signals():
+         ^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/rocketride/engine/lib/python3.12/contextlib.py", line 144, in __exit__
+    next(self.gen)
+  File "/opt/rocketride/engine/lib/python3.12/site-packages/uvicorn/server.py", line 335, in capture_signals
+    signal.signal(sig, handler)
+  File "/opt/rocketride/engine/lib/python3.12/signal.py", line 58, in signal
+    handler = _signal.signal(_enum_to_int(signalnum), _enum_to_int(handler))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: signal handler must be signal.SIG_IGN, signal.SIG_DFL, or a callable object
+[118MB] Exit: Python (ap:0x3c) init.cpp:536
+        Message: Python error 1
+[entrypoint] booting RocketRide engine on :5565
+
+        _____            _        _   _____  _     _
+       |  __ \          | |      | | |  __ \(_)   | |
+       | |__) |___   ___| | _____| |_| |__) |_  __| | ___
+       |  _  // _ \ / __| |/ / _ \ __|  _  /| |/ _` |/ _ \
+       | | \ \ (_) | (__|   <  __/ |_| | \ \| | (_| |  __/
+       |_|  \_\___/ \___|_|\_\___|\__|_|  \_\_|\__,_|\___|
+
+
+            Copyright (c) 2026 Aparavi Software AG
+                    All rights reserved
+    
+INFO:     Started server process [1]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://localhost:5565 (Press CTRL+C to quit)
+INFO:     127.0.0.1:36998 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:55204 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:55210 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:55216 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:55222 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:55224 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:55232 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:55246 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     Shutting down
+INFO:     Waiting for background tasks to complete. (CTRL+C to force quit)
+[entrypoint] booting RocketRide engine on :5565
+
+        _____            _        _   _____  _     _
+       |  __ \          | |      | | |  __ \(_)   | |
+       | |__) |___   ___| | _____| |_| |__) |_  __| | ___
+       |  _  // _ \ / __| |/ / _ \ __|  _  /| |/ _` |/ _ \
+       | | \ \ (_) | (__|   <  __/ |_| | \ \| | (_| |  __/
+       |_|  \_\___/ \___|_|\_\___|\__|_|  \_\_|\__,_|\___|
+
+
+            Copyright (c) 2026 Aparavi Software AG
+                    All rights reserved
+    
+INFO:     Started server process [1]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://localhost:5565 (Press CTRL+C to quit)
+INFO:     127.0.0.1:50726 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:33226 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:33232 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:33242 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:33248 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:33264 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:33270 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:33272 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [1]
+Traceback (most recent call last):
+  File "/opt/rocketride/engine/ai/eaas.py", line 178, in <module>
+    main()
+  File "/opt/rocketride/engine/ai/eaas.py", line 172, in main
+    asyncio.run(run())
+  File "/opt/rocketride/engine/lib/python3.12/asyncio/runners.py", line 195, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/opt/rocketride/engine/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/rocketride/engine/lib/python3.12/asyncio/base_events.py", line 691, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/opt/rocketride/engine/ai/eaas.py", line 166, in run
+    await server.serve()
+  File "/opt/rocketride/engine/ai/web/server.py", line 978, in serve
+    await self.server.serve()
+  File "/opt/rocketride/engine/lib/python3.12/site-packages/uvicorn/server.py", line 80, in serve
+    with self.capture_signals():
+         ^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/rocketride/engine/lib/python3.12/contextlib.py", line 144, in __exit__
+    next(self.gen)
+  File "/opt/rocketride/engine/lib/python3.12/site-packages/uvicorn/server.py", line 335, in capture_signals
+    signal.signal(sig, handler)
+  File "/opt/rocketride/engine/lib/python3.12/signal.py", line 58, in signal
+    handler = _signal.signal(_enum_to_int(signalnum), _enum_to_int(handler))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: signal handler must be signal.SIG_IGN, signal.SIG_DFL, or a callable object
+[120MB] Exit: Python (ap:0x3c) init.cpp:536
+        Message: Python error 1
+[entrypoint] booting RocketRide engine on :5565
+
+        _____            _        _   _____  _     _
+       |  __ \          | |      | | |  __ \(_)   | |
+       | |__) |___   ___| | _____| |_| |__) |_  __| | ___
+       |  _  // _ \ / __| |/ / _ \ __|  _  /| |/ _` |/ _ \
+       | | \ \ (_) | (__|   <  __/ |_| | \ \| | (_| |  __/
+       |_|  \_\___/ \___|_|\_\___|\__|_|  \_\_|\__,_|\___|
+
+
+            Copyright (c) 2026 Aparavi Software AG
+                    All rights reserved
+    
+INFO:     Started server process [1]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://localhost:5565 (Press CTRL+C to quit)
+INFO:     127.0.0.1:57280 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:38470 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:38476 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:38492 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:38502 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:38504 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:38508 - "WebSocket /task/service" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:38512 - "WebSocket /task/service" [accepted]
+INFO:     connection open

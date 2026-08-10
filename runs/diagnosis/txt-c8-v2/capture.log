@@ -1,0 +1,3 @@
+[diag 15:16:35] clean restart
+[diag 15:16:52] rr healthy; launching /work/txt100 c8 x100 (timeout 120s)
+[diag 15:17:52] done: records=101, captured=0

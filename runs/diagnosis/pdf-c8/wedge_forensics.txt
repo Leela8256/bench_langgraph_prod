@@ -1,0 +1,58 @@
+=== ps ===
+  PID   RSS NLWP STAT COMMAND
+    1 133676  25 Ssl  ./engine /opt/rocketride/engine/ai/eaas.py
+   63 59368    2 Ssl  python /work/rr_stepped.py /work/corpus /work/out/diag 8 120 100
+   70 3020688 205 Sl  /opt/rocketride/engine/engine /opt/rocketride/engine/ai/node.py /tmp/task-7cf62226.webhook_1-utcju88b.json --autoterm --monitor=app --debug_port=20000 --debug_host=localhost --data_port=20001 --data_host=localhost
+  623     0    1 Z    [jspawnhelper] <defunct>
+  624  2592    1 S    /opt/rocketride/engine/java/jre/lib/jspawnhelper 17.0.19+10 179:187:190
+  930  4732    1 Ss   sh -c        echo '=== ps ==='; ps ax -o pid,rss,nlwp,stat,args | head -25       echo '=== thread states of backend 70 ==='       for t in /proc/70/task/*/stat; do awk '{print $3}' $t 2>/dev/null; done | sort | uniq -c       echo '=== wchan histogram ==='       for t in /proc/70/task/*/wchan; do cat $t 2>/dev/null; echo; done | sort | uniq -c | sort -rn | head -12       echo '=== jspawnhelpers ==='       ps ax -o pid,ppid,stat,args | grep -i jspawn | grep -v grep       echo '=== backend fds ==='; ls /proc/70/fd 2>/dev/null | wc -l       echo '=== mem ==='; grep -E 'VmRSS|Threads' /proc/70/status     
+  936  6592    1 R    ps ax -o pid,rss,nlwp,stat,args
+  937  3168    1 S    head -25
+=== thread states of backend 70 ===
+      1 #0)
+      1 #1)
+      1 #2)
+      1 #3)
+      1 #4)
+      1 #5)
+      1 #6)
+      1 #7)
+      1 #8)
+      1 #9)
+      4 CompilerThre)
+      1 Conc#0)
+      1 Conc#1)
+      1 Conc#2)
+      1 Deflati)
+      1 Disposer)
+      1 Handl)
+      2 Listener)
+      1 Main
+      1 Periodic
+      1 Refine#0)
+    165 S
+      1 Service)
+      1 Th)
+      1 Thread#0)
+      1 Thread#1)
+      1 Thread#2)
+      1 Thread#3)
+      1 Thread#4)
+      1 Thread#5)
+      1 Thread#6)
+      1 Thread#7)
+      1 Thread#8)
+      1 Thread#9)
+      2 Thread)
+      1 thread)
+=== wchan histogram ===
+    167 rt_mutex_schedule
+     38 futex_wait_queue
+=== jspawnhelpers ===
+  623    70 Z    [jspawnhelper] <defunct>
+  624    70 S    /opt/rocketride/engine/java/jre/lib/jspawnhelper 17.0.19+10 179:187:190
+=== backend fds ===
+199
+=== mem ===
+VmRSS:	 3020688 kB
+Threads:	205

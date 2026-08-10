@@ -105,7 +105,7 @@ async def warmup(pool, out_dir):
 
 
 async def run_level(pool, corpus, out_dir, level, timeout_s, n_docs):
-    docs = sorted(Path(corpus).glob("*.pdf"))[:n_docs]
+    docs = sorted(p for p in Path(corpus).iterdir() if p.suffix in (".pdf", ".txt"))[:n_docs]
     out = Path(out_dir)
     raw = out / "raw"
     raw.mkdir(parents=True, exist_ok=True)

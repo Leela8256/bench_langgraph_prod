@@ -61,3 +61,11 @@
   repro DID NOT wedge this time (44/50 ok — nondeterminism now observed in
   both directions, consistent with an environmental/racy mechanism);
   discriminating pair in flight: txt-c8 (no Tika/JVM) vs pdf-c8 (Tika).
+- **15:20** DIAGNOSIS COMPLETE (diagnosis/DIAGNOSIS.md): discriminating
+  experiment — pdf-c8x100 WEDGED at 18 docs (forensics: 167/205 threads in
+  rt_mutex_schedule, jspawnhelper stuck mid-handshake, live JVM inside
+  backend); txt-c8x100 over the SAME documents' extracted text: 100/100
+  clean in 36 s. Wedge localizes to the parse stage (Tika 3.2.3 on
+  embedded Java 17 JVM). Product-vs-emulation attribution requires a
+  native Linux x64 rerun (15-min test specified in DIAGNOSIS.md).
+  Splitter + embedder exonerated at sustained c8.
