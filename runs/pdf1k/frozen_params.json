@@ -1,0 +1,11 @@
+{
+  "formula": "max(60, calibration_p99 * 5) per arm \u2014 FROZEN before rep 1",
+  "lg_calibration_p99_s": 60.96,
+  "rr_calibration_p99_s": null,
+  "lg_timeout_s": 304.8,
+  "rr_timeout_s": 60.0,
+  "container_cpus": 12,
+  "container_memory_gb": 12,
+  "submission": "open-loop burst, all docs at once, no client cap",
+  "chunk_size": "NOT SET (framework defaults; pinned inequality stands)"
+}

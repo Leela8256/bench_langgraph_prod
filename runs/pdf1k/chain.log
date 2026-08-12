@@ -1,0 +1,11 @@
+[chain 03:08:02] cal-lg done: {"arm": "lg", "n_records": 100, "n_expected": 100, "all_returned": true, "ids_unique": true, "n_ok": 100, "dims_ok": true, "finite_ok": true, "norms_ok": true, "gt_hash_mismatches": [], "gt_exact": tr
+[chain 03:08:02] cal-rr starting
+[chain 05:39:55] cal-rr done: {"arm": "rr", "n_records": 0, "n_expected": 100, "all_returned": false, "ids_unique": true, "n_ok": 0, "dims_ok": true, "finite_ok": true, "norms_ok": true, "baseline_written": true, "valid": false}
+{"formula": "max(60, calibration_p99 * 5) per arm \u2014 FROZEN before rep 1", "lg_calibration_p99_s": 60.96, "rr_calibration_p99_s": null, "lg_timeout_s": 304.8, "rr_timeout_s": 60.0, "container_cpus": 12, "container_memory_gb": 12, "submission": "open-loop burst, all docs at once, no client cap", "chunk_size": "NOT SET (framework defaults; pinned inequality stands)"}
+[chain 05:39:55] FROZEN: lg_timeout=304.8s rr_timeout=60.0s
+[chain 05:39:55] rep1-lg starting (n=1000 timeout=304.8s)
+[chain 06:42:49] CUTOFF 06:40 hit during rep1-lg — killing (partial, invalid, preserved)
+[chain 06:42:49] rep1-lg finished: 
+[chain 06:42:49] SKIP rep1-rr: <15 min to cutoff
+[chain 06:42:49] post-run drift fixture
+[chain 06:43:12] CHAIN COMPLETE

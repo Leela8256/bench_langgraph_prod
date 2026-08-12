@@ -1,0 +1,1 @@
+{"stage0":{"lg_model":"sentence-transformers/multi-qa-MiniLM-L6-cos-v1","rr_model":"sentence-transformers/multi-qa-MiniLM-L6-cos-v1","dim":384,"fixture_pre_first4":[0.003873,0.028066,0.06724,0.068548]}}

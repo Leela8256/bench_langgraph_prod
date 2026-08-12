@@ -1,0 +1,7 @@
+[diag 15:12:48] clean restart
+[diag 15:13:00] rr healthy; launching /work/corpus c8 x100 (timeout 120s)
+[diag 15:15:16] STALL at 18 records — capturing forensics
+[diag 15:15:16] backend pid=70
+[diag 15:15:20] sending SIGQUIT to backend for JVM thread dump
+[diag 15:15:25] forensics captured; killing driver + reaping
+[diag 15:15:25] done: records=18, captured=1

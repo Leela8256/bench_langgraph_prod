@@ -1,0 +1,79 @@
+{
+  "components": [
+    {
+      "id": "webhook_1",
+      "provider": "webhook",
+      "config": {
+        "hideForm": true,
+        "type": "webhook",
+        "mode": "Source"
+      }
+    },
+    {
+      "id": "parse_1",
+      "provider": "parse",
+      "config": {},
+      "input": [
+        {
+          "lane": "tags",
+          "from": "webhook_1"
+        }
+      ]
+    },
+    {
+      "id": "preprocessor_1",
+      "provider": "preprocessor_langchain",
+      "config": {
+        "profile": "default",
+        "default": {
+          "splitter": "RecursiveCharacterTextSplitter",
+          "mode": "strlen",
+          "strlen": 512
+        }
+      },
+      "input": [
+        {
+          "lane": "text",
+          "from": "parse_1"
+        },
+        {
+          "lane": "text",
+          "from": "webhook_1"
+        }
+      ]
+    },
+    {
+      "id": "embedding_1",
+      "provider": "embedding_transformer",
+      "config": {
+        "profile": "miniLM"
+      },
+      "input": [
+        {
+          "lane": "documents",
+          "from": "preprocessor_1"
+        }
+      ]
+    },
+    {
+      "id": "response_1",
+      "provider": "response_documents",
+      "config": {
+        "laneName": "documents"
+      },
+      "input": [
+        {
+          "lane": "documents",
+          "from": "embedding_1"
+        }
+      ]
+    }
+  ],
+  "project_id": "5df00eba-7df3-4745-958b-9a81f393facc",
+  "viewport": {
+    "x": 0,
+    "y": 0,
+    "zoom": 1
+  },
+  "version": 1
+}

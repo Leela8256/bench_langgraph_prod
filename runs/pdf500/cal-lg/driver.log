@@ -1,0 +1,3 @@
+[lg L4] 25/50
+[lg L4] 50/50
+{"kind": "level_meta", "arm": "langgraph", "level": 4, "n_docs": 50, "level_span_s": 44.860633917, "client_cpu_s": 0.27, "client_maxrss_mb": 61.1}

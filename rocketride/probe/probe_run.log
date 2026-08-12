@@ -1,0 +1,15 @@
+[19:19:20] booting engine: ./engine /opt/rocketride/engine/ai/eaas.py (cwd=/opt/rocketride/engine)
+[19:19:46] engine up on 5565 after 25.6s
+[19:19:46] connected: True
+[19:19:46]   [pdf_run_a] validate(): errors=[{"ccode": 40, "message": "'pipeline' is missing or invalid"}]
+[19:21:05]   [pdf_run_a] token=tk_8faeeb05ff718ab0770bd42b8e692a5f
+[19:21:07]   [pdf_run_a] documents returned: 5
+[19:21:12]   [pdf_run_b] validate(): errors=[{"ccode": 40, "message": "'pipeline' is missing or invalid"}]
+[19:21:24]   [pdf_run_b] token=tk_12913b84fc6336ffbc61e4302b01ad79
+[19:21:25]   [pdf_run_b] documents returned: 5
+[19:21:30]   [pdf_run_c_strlen512] validate(): errors=[{"ccode": 40, "message": "'pipeline' is missing or invalid"}]
+[19:21:41]   [pdf_run_c_strlen512] token=tk_71259e822343f353e7e2de57c9c92332
+[19:21:43]   [pdf_run_c_strlen512] documents returned: 5
+[19:21:48]   [txt_parity] validate(): errors=[{"ccode": 40, "message": "'pipeline' is missing or invalid"}]
+[19:21:58]   [txt_parity] token=tk_7769d932a09028eff1f7ee7ba4af4c92
+[19:21:58]   [txt_parity] documents returned: 1
