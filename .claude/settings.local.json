@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find \"/Users/leelaprasaddammalapati/Desktop\" \"/Users/leelaprasaddammalapati/Downloads\" \"/Users/leelaprasaddammalapati/Documents\" -maxdepth 3 -iname \"*.docx\" -mtime -30 2>/dev/null | head -10)",
+      "Read(//Users/leelaprasaddammalapati/Desktop/**)",
+      "Bash(/usr/bin/python3 -)",
+      "Bash(curl -fsSL --retry 3 -o engine-3.3.1-darwin-arm64.tgz \"https://github.com/rocketride-org/rocketride-server/releases/download/server-v3.3.1/rocketride-server-v3.3.1-darwin-arm64.tar.gz\")",
+      "Bash(tar -xzf engine-3.3.1-darwin-arm64.tgz)",
+      "Bash(shasum -a 256 engine)",
+      "Bash(xattr -dr com.apple.quarantine .)",
+      "Bash(/usr/bin/python3 gate50/check_gate50.py)",
+      "Bash(docker exec -i prodbench-langgraph python -c ' *)",
+      "Bash(/usr/bin/python3 -c ' *)",
+      "Bash(git add *)",
+      "Bash(git commit -q -m 'Gate-50 local run: RR native 3.3.1 \\(no docker\\) + LG docker, blast-50, simple correctness gate — all gates pass; 000164 reclassified as no-text doc \\(both parsers agree\\) *)"
+    ]
+  }
+}

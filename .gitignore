@@ -9,3 +9,5 @@ __pycache__/
 *.pyc
 .pytest_cache/
 langgraph-fastapi/.venv/
+rocketride-native/
+gate50/out*/
