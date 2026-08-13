@@ -12,7 +12,8 @@
       "Bash(docker exec -i prodbench-langgraph python -c ' *)",
       "Bash(/usr/bin/python3 -c ' *)",
       "Bash(git add *)",
-      "Bash(git commit -q -m 'Gate-50 local run: RR native 3.3.1 \\(no docker\\) + LG docker, blast-50, simple correctness gate — all gates pass; 000164 reclassified as no-text doc \\(both parsers agree\\) *)"
+      "Bash(git commit -q -m 'Gate-50 local run: RR native 3.3.1 \\(no docker\\) + LG docker, blast-50, simple correctness gate — all gates pass; 000164 reclassified as no-text doc \\(both parsers agree\\) *)",
+      "Bash(/usr/bin/python3 -m json.tool gate50/out_rr/pipeline.pipe)"
     ]
   }
 }

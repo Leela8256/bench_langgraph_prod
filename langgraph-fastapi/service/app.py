@@ -50,9 +50,11 @@ def _workload_versions() -> Dict[str, Any]:
     """
     info: Dict[str, Any] = {}
     try:
+        from workload.document.extract import extractor_info
         from workload.document.extract_pdf import pypdf_version
 
         info["pypdf"] = pypdf_version()
+        info["extractor"] = extractor_info()
     except Exception as exc:  # workload deps absent (e.g. mock-only deploys)
         info["pypdf"] = f"unavailable: {type(exc).__name__}"
     try:

@@ -43,6 +43,9 @@ services:
       TORCH_INTEROP_THREADS: "1"
       MAX_UPLOAD_BYTES: "104857600"
       HF_HUB_OFFLINE: "1"
+      # Extractor switch: pypdf (default) or tika (sidecar, RR-matched config)
+      EXTRACTOR: "${LG_EXTRACTOR:-pypdf}"
+      TIKA_URL: "http://tika:9998"
     ports:
       - "8100:8100"
     healthcheck:
@@ -75,3 +78,16 @@ services:
       timeout: 5s
       retries: 30
       start_period: 30s
+
+  tika:
+    # Pinned to the exact Tika version the RocketRide engine bundles (3.2.3),
+    # loaded with RocketRide's own tika-config.xml so parser settings match
+    # (sortByPosition, form/annotation/bookmark extraction, OCR excluded).
+    # Only used when LG_EXTRACTOR=tika; harmless idle otherwise.
+    image: apache/tika:3.2.3.0-full
+    container_name: prodbench-tika
+    command: ["-c", "/tika-config/tika-config.xml"]
+    volumes:
+      - ./langgraph-fastapi/tika-config:/tika-config:ro
+    ports:
+      - "9998:9998"

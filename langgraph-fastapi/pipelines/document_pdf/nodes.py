@@ -17,7 +17,7 @@ from typing import Any, Dict
 
 from pipelines.document_pdf.state import PdfState
 from workload.document.embed import embed_chunks
-from workload.document.extract_pdf import extract_pdf
+from workload.document.extract import extract
 from workload.document.split import split_document
 
 
@@ -29,7 +29,7 @@ def _timed(state: PdfState, name: str, started: int) -> Dict[str, int]:
 
 def extract_node(state: PdfState) -> Dict[str, Any]:
     t0 = time.perf_counter_ns()
-    text = extract_pdf(state["source_path"])
+    text = extract(state["source_path"])
     return {"text": text, "timings_ns": _timed(state, "extract", t0)}
 
 
