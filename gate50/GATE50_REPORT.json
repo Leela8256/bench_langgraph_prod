@@ -1,24 +1,49 @@
 {
  "rocketride_native_3.3.1": {
   "gate": {
-   "census_records": "50/50",
-   "census_unique": true,
-   "census_silent": 0,
+   "census": {
+    "offered": 50,
+    "records": 50,
+    "silent": 0,
+    "duplicate_docs": [],
+    "missing_docs": [],
+    "unexpected_docs": [],
+    "completed": 49,
+    "failed_by_reason": {
+     "no_documents": 1
+    },
+    "failed_docs": {
+     "no_documents": [
+      "000164.pdf"
+     ]
+    },
+    "failure_examples": {
+     "no_documents": [
+      "[{\"action\": \"complete\", \"filepath\": \"/Users/leelaprasaddammalapati/Desktop/prod bench/datasets/govdocs/000164.pdf\", \"bytes_sent\": 2590299, \"file_size\": 2590299, \"upload_time\": 15.354812860488892, \"result\": {\"metadata\": {\"access_permission:assemble_document\": \"true\", \"access_permission:can_modify\": \""
+     ]
+    },
+    "unexpected_failures": 0,
+    "unexpected_failure_docs": [],
+    "PASS": true
+   },
+   "structure": {
+    "bad_docs": {},
+    "completed_empty": [],
+    "PASS": true
+   },
+   "determinism": {
+    "compared": 49,
+    "mismatch_docs": [],
+    "only_in_a": [],
+    "only_in_b": [],
+    "PASS": true
+   },
    "completed": 49,
-   "failed_by_reason": {
-    "no_documents": 1
-   },
-   "failed_docs": {
-    "no_documents": [
-     "000164.pdf"
-    ]
-   },
-   "structure_bad_docs": [],
    "completed_empty_docs": [],
    "GATE_census": true,
    "GATE_structure": true,
-   "GATE_determinism": "PENDING (needs sequential pass)",
-   "note_unexpected_failures": 0
+   "GATE_determinism": true,
+   "GATE_all": true
   },
   "metrics": {
    "warmup_boundary": "first 20 completions excluded",
@@ -70,20 +95,43 @@
  },
  "langgraph_docker": {
   "gate": {
-   "census_records": "50/50",
-   "census_unique": true,
-   "census_silent": 0,
+   "census": {
+    "offered": 50,
+    "records": 50,
+    "silent": 0,
+    "duplicate_docs": [],
+    "missing_docs": [],
+    "unexpected_docs": [],
+    "completed": 50,
+    "failed_by_reason": {},
+    "failed_docs": {},
+    "failure_examples": {},
+    "unexpected_failures": 0,
+    "unexpected_failure_docs": [],
+    "PASS": true
+   },
+   "structure": {
+    "bad_docs": {},
+    "completed_empty": [
+     "000164.pdf"
+    ],
+    "PASS": true
+   },
+   "determinism": {
+    "compared": 50,
+    "mismatch_docs": [],
+    "only_in_a": [],
+    "only_in_b": [],
+    "PASS": true
+   },
    "completed": 50,
-   "failed_by_reason": {},
-   "failed_docs": {},
-   "structure_bad_docs": [],
    "completed_empty_docs": [
     "000164.pdf"
    ],
    "GATE_census": true,
    "GATE_structure": true,
-   "GATE_determinism": "PENDING (needs sequential pass)",
-   "note_unexpected_failures": 0
+   "GATE_determinism": true,
+   "GATE_all": true
   },
   "metrics": {
    "warmup_boundary": "first 20 completions excluded",

@@ -1,8 +1,11 @@
 """Gate-50 checker — the SIMPLE correctness gate + bulk-run metrics.
 
-Gates (per arm): census (50 records, unique, zero silent, expected-fails
-classified) and structure (chunks>=1, 384-dim, finite, norm≈1; LG sha
-header). Determinism gate = PENDING until the sequential pass exists.
+Gates (per arm), all fail-closed via metrics.m0_correctness: census
+(manifest identity, unique, zero silent, zero unexpected failures),
+structure (per-arm field contract, 384-dim, norm≈1, hash counts; zero-chunk
+completions only for allowlisted no-text docs), determinism (blast vs the
+sequential pass when out_<arm>_seq exists; None — never a truthy string —
+while pending).
 
 Metrics (per arm): warm-window throughput/latency — the first 20
 COMPLETIONS are warmup; M1/M2 are computed over completions 21..N.
@@ -14,63 +17,58 @@ Cross-arm: chunk-count/char deltas (reported, not gated) + parity fixture.
 
 import json
 import statistics as st
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
+from metrics.m0_correctness import census, determinism, gate_verdict, structure
+from metrics.records import load_records
+
 G = ROOT / "gate50"
-EXPECTED_FAIL_RR = {"000164.pdf"}  # near-empty PDF (12 chars via pypdf too): completed-empty, not a defect
+# Known no-text PDF (12 chars via pypdf too). LG completes it with 0 chunks,
+# RR fails it with reason=no_documents — both acceptable, for this doc only.
+EXPECTED_EMPTY = {"000164.pdf"}
 WARM_N = 20
 
 
-def load(arm):
-    rows, meta = [], None
-    p = G / f"out_{arm}" / "per_doc.jsonl"
-    for line in p.read_text().splitlines():
-        r = json.loads(line)
-        if r.get("kind") in ("shot_meta", "level_meta"):
-            meta = r
-        else:
-            rows.append(r)
+def load(arm, suffix=""):
+    p = G / f"out_{arm}{suffix}" / "per_doc.jsonl"
+    if not p.exists():
+        return None, None
+    rows, meta, _ = load_records(p)
     return rows, meta
 
 
-def gate(rows, arm, n_expected=50):
-    docs = [r["doc"] for r in rows]
-    ok = [r for r in rows if r.get("ok")]
-    fails = [r for r in rows if not r.get("ok")]
-    by_reason = {}
-    for r in fails:
-        by_reason.setdefault(r.get("reason") or r.get("error", "?")[:30], []).append(r["doc"])
-    structure_bad = []
-    empty_ok = []
-    for r in ok:
-        if r.get("n_chunks", 0) == 0:
-            empty_ok.append(r["doc"])  # completed-empty: valid (no-text doc)
-            continue
-        good = (r.get("n_chunks", 0) >= 1 and r.get("vector_dim") == 384
-                and r.get("l2_norms_minmax")
-                and abs(r["l2_norms_minmax"][0] - 1) < 1e-3
-                and abs(r["l2_norms_minmax"][1] - 1) < 1e-3
-                and r.get("identity_ok", True))
-        if arm == "lg" and r.get("sha_header_ok") is False:
-            good = False
-        if not good:
-            structure_bad.append(r["doc"])
-    unexpected_fail = [d for ds in by_reason.values() for d in ds
-                       if d not in EXPECTED_FAIL_RR]
+def expected_docs(arm, n_expected):
+    """Corpus identity so silent drops are named, not just counted: the
+    run's own manifest if the driver wrote one, else the same expression
+    the drivers use to pick the corpus."""
+    m = G / f"out_{arm}" / "manifest.json"
+    if m.exists():
+        return set(json.loads(m.read_text())["docs"])
+    d = ROOT / "datasets" / "govdocs"
+    names = sorted(p.name for p in d.glob("*.pdf"))[:n_expected] if d.is_dir() else []
+    return set(names) if len(names) == n_expected else None
+
+
+def gate(rows, arm, seq_rows=None, n_expected=50):
+    c = census(rows, n_expected, expected_docs=expected_docs(arm, n_expected),
+               expected_empty=EXPECTED_EMPTY)
+    s = structure(rows, arm, expected_empty=EXPECTED_EMPTY)
+    det = determinism(rows, seq_rows) if seq_rows else None
     return {
-        "census_records": f"{len(rows)}/{n_expected}",
-        "census_unique": len(set(docs)) == len(docs),
-        "census_silent": n_expected - len(rows),
-        "completed": len(ok),
-        "failed_by_reason": {k: len(v) for k, v in by_reason.items()},
-        "failed_docs": {k: v for k, v in by_reason.items()},
-        "structure_bad_docs": structure_bad,
-        "completed_empty_docs": empty_ok,
-        "GATE_census": len(rows) == n_expected and len(set(docs)) == len(docs),
-        "GATE_structure": not structure_bad,
-        "GATE_determinism": "PENDING (needs sequential pass)",
-        "note_unexpected_failures": len(unexpected_fail),
+        "census": c,
+        "structure": s,
+        "determinism": det or {"PASS": None,
+                               "status": "PENDING (needs sequential pass)"},
+        "completed": c["completed"],
+        "completed_empty_docs": s["completed_empty"],
+        "GATE_census": c["PASS"],
+        "GATE_structure": s["PASS"],
+        "GATE_determinism": det["PASS"] if det else None,
+        "GATE_all": gate_verdict(c, s, det),
     }
 
 
@@ -174,9 +172,12 @@ def main():
     report = {}
     rr_rows, rr_meta = load("rr")
     lg_rows, lg_meta = load("lg")
-    for arm, rows, meta in (("rocketride_native_3.3.1", rr_rows, rr_meta),
-                            ("langgraph_docker", lg_rows, lg_meta)):
-        report[arm] = {"gate": gate(rows, "rr" if "rocket" in arm else "lg"),
+    rr_seq, _ = load("rr", "_seq")
+    lg_seq, _ = load("lg", "_seq")
+    for arm, rows, meta, seq in (("rocketride_native_3.3.1", rr_rows, rr_meta, rr_seq),
+                                 ("langgraph_docker", lg_rows, lg_meta, lg_seq)):
+        report[arm] = {"gate": gate(rows, "rr" if "rocket" in arm else "lg",
+                                    seq_rows=seq),
                        "metrics": window_metrics(rows),
                        "meta": meta}
     report["rocketride_native_3.3.1"]["resources"] = rr_resources()

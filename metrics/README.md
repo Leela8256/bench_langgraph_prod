@@ -17,20 +17,37 @@ be recomputed forever.
 ## M0 — Correctness gate  → `m0_correctness.py`
 
 **Logic:** performance numbers are meaningless if work was lost, corrupted,
-or unstable — so correctness is a GATE, not a score. Four checks, each
-catching a distinct failure class:
+or unstable — so correctness is a GATE, not a score.
+
+**Doctrine — fail closed.** A missing field, an unproven state, or a
+pending sub-check is a violation, never a pass. Structure enforces a
+per-arm field contract (`REQUIRED_TRUE`): RR records must carry
+`identity_ok=True`; LG records additionally `sha_header_ok=True` and
+`vectors_finite=True` — absence fails, it does not default to pass. The one
+sanctioned escape hatch is `expected_empty`: a named set of known no-text
+docs (today only `000164.pdf`) allowed to produce zero content, either as a
+zero-chunk completion (LG) or an explicit `no_documents` failure (RR); any
+other doc producing nothing is a defect. `gate_verdict()` requires `PASS`
+to be exactly `True` — `None`, `"PENDING"`, or a truthy placeholder can
+never aggregate to green.
+
+Four checks, each catching a distinct failure class:
 
 1. **Census** (`census()`): loss detection. offered == records, unique doc
-   ids, zero silent documents (every doc has a completion or an explicit
-   failure reason). Failures classified by reason; known no-text docs
-   (e.g. `000164.pdf`) are "completed-empty", not violations.
+   ids, zero silent documents, zero unexpected failures. When the corpus
+   manifest (`expected_docs`) is supplied, silent drops are NAMED
+   (`missing_docs`), not just counted. Failures bucket by driver reason or
+   exception type — never by a truncated message prefix — with distinct
+   full messages kept per bucket in `failure_examples`.
 2. **Structure** (`structure()`): corruption detection. Every completed doc:
-   ≥1 chunk (or legitimately empty), every vector exactly 384-dim, finite,
-   L2 norm within 1e-3 of 1.0, identity verified (RR: filepath echo;
-   LG: request_id echo + X-Output-SHA256 == sha256(body)).
+   ≥1 chunk (or allowlisted-empty, identity still verified), every vector
+   exactly 384-dim, finite, L2 norm within 1e-3 of 1.0, chunk-hash count ==
+   n_chunks, identity verified (RR: filepath echo; LG: request_id echo +
+   X-Output-SHA256 == sha256(body)). Violations are reported per doc.
 3. **Determinism** (`determinism()`): instability detection. Ordered chunk
-   hashes from run A must equal run B per doc, per arm. The arm must agree
-   with itself byte-for-byte across runs/modes.
+   hashes from run A must equal run B per doc, per arm; a doc whose OUTCOME
+   flips between runs (ok in one, failed in the other) also fails. The arm
+   must agree with itself byte-for-byte across runs/modes.
 4. **Ground truth** (`ground_truth_match()`): absolute-correctness tier
    where a reference exists (LG: offline pypdf refs; RR: sequential capture;
    tika mode: cross-arm byte equality is additionally possible).

@@ -68,6 +68,9 @@ async def main():
 
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "raw").mkdir(exist_ok=True)
+    # corpus manifest: lets the checker name silent drops, not just count them
+    (OUT / "manifest.json").write_text(json.dumps(
+        {"docs": [p.name for p in CORPUS], "n": len(CORPUS)}))
 
     pipe = json.loads((ROOT / "rocketride" / "benchmark_pdf.pipe").read_text())
     pipe["project_id"] = str(uuid.uuid4())

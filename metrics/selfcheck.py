@@ -43,7 +43,7 @@ def main() -> int:
         if not c["PASS"] == old["gate"]["GATE_census"]:
             failures.append(f"{arm} census PASS mismatch")
 
-        s = structure(rows, arm)
+        s = structure(rows, arm, expected_empty={"000164.pdf"})
         if s["PASS"] != old["gate"]["GATE_structure"]:
             failures.append(f"{arm} structure PASS mismatch")
 
