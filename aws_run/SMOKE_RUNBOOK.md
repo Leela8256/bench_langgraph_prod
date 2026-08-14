@@ -108,7 +108,24 @@ Paste `report.txt` back and I will analyse it.
 
 Box disk survives an auto-stop, so results are not lost if the box shuts down —
 but there is no scp, so S3 is the only way to get them onto your Mac. Override
-the bucket with `BENCH_S3=s3://other/prefix`. To pull a run down locally:
+the bucket with `BENCH_S3=s3://other/prefix`.
+
+> ⚠️ **BLOCKED as of 2026-08-14: the download half does not work yet.** The box
+> can write to S3 (instance role), but the `leela` SSO role — the one your
+> laptop assumes — has **no `s3:ListBucket` and no `s3:GetObject`** on
+> `rocketride-benchmark-data`. Verified directly:
+> ```
+> aws s3 ls s3://rocketride-benchmark-data/ --profile leela
+> → AccessDenied ... not authorized to perform: s3:ListBucket
+> ```
+> `s3api get-object` fails the same way, so it is not merely a listing
+> restriction. Results can go UP from the box and then be unreachable.
+> **Ask the admin for `s3:ListBucket` (prefix `leela/*`) + `s3:GetObject` on
+> `arn:aws:s3:::rocketride-benchmark-data/leela/*` for BenchmarkBoxOperator.**
+> Until then, read results in the SSM session on the box, or have the box
+> print them.
+
+Once read access exists, pull a run down and recompute:
 
 ```bash
 aws s3 cp s3://rocketride-benchmark-data/leela/smoke/<UTC>/ ./run --recursive --profile leela
