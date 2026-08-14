@@ -125,6 +125,14 @@ the bucket with `BENCH_S3=s3://other/prefix`.
 > Until then, read results in the SSM session on the box, or have the box
 > print them.
 
+**Workaround that needs no grant:** `bash aws_run/box/exfil.sh <run_dir> --print`.
+It packs the run, uploads it, probes whether the instance role can read its own
+writes (which decides whether a presigned URL would work), and can emit the
+whole thing as base64 with a SHA-256 to copy out through the SSM session.
+Measured: a 10-doc run with both passes and the sampler is **5.5 KB packed**,
+so even a 1000-doc run should land well under a megabyte — terminal paste is a
+viable exit for the entire benchmark, not just the smoke.
+
 Once read access exists, pull a run down and recompute:
 
 ```bash
