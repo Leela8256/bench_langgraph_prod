@@ -11,3 +11,6 @@ __pycache__/
 langgraph-fastapi/.venv/
 rocketride-native/
 gate50/out*/
+# AWS run: environment-specific config and on-box run artifacts
+aws_run/local.env
+aws_run/evidence/smoke_*/
