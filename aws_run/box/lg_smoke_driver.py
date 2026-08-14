@@ -14,10 +14,12 @@ import hashlib
 import json
 import math
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 BASE = "http://127.0.0.1:8100"
@@ -128,6 +130,9 @@ def main():
     corpus_dir = Path(sys.argv[1])
     out = Path(sys.argv[2])
     n = int(sys.argv[3]) if len(sys.argv) > 3 else 10
+    # seq | blast | c<N>.  blast = whole backlog submitted at once, the
+    # framework schedules it. c<N> = closed loop holding N in flight.
+    mode = sys.argv[4] if len(sys.argv) > 4 else "seq"
 
     corpus = sorted(corpus_dir.glob("*.pdf"))[:n]
     if not corpus:
@@ -137,23 +142,66 @@ def main():
         json.dumps({"docs": [p.name for p in corpus], "n": len(corpus)})
     )
 
+    if mode == "seq":
+        offered = 1
+    elif mode == "blast":
+        offered = len(corpus)
+    elif mode.startswith("c") and mode[1:].isdigit():
+        offered = int(mode[1:])
+    else:
+        raise SystemExit(f"bad mode {mode!r}: expected seq | blast | c<N>")
+
+    # Sampler timestamps are wall-clock epoch; per-doc timestamps are
+    # monotonic. This offset is what lets m7_resources.window() slice the
+    # sampler to EXACTLY the throughput window.
+    mono_offset_ns = time.time_ns() - time.perf_counter_ns()
+
     t0 = time.perf_counter_ns()
-    with open(out / "per_doc.jsonl", "w") as fh:
+    records = []
+    if offered == 1:
         for i, pdf in enumerate(corpus, 1):
             rec = one(pdf)
-            fh.write(json.dumps(rec) + "\n")
-            fh.flush()
+            records.append(rec)
             print(f"  [{i}/{len(corpus)}] {pdf.name}: ok={rec['ok']} "
                   f"chunks={rec.get('n_chunks')} "
                   f"{(rec['completion_ns'] - rec['submit_ns']) / 1e6:.0f} ms",
                   flush=True)
-        span = (time.perf_counter_ns() - t0) / 1e9
+    else:
+        done = [0]
+        lock = threading.Lock()
+
+        def run(pdf):
+            rec = one(pdf)
+            with lock:
+                done[0] += 1
+                if done[0] % 25 == 0 or done[0] == len(corpus):
+                    print(f"  [{done[0]}/{len(corpus)}]", flush=True)
+            return rec
+
+        with ThreadPoolExecutor(max_workers=offered) as pool:
+            records = list(pool.map(run, corpus))
+    span = (time.perf_counter_ns() - t0) / 1e9
+
+    with open(out / "per_doc.jsonl", "w") as fh:
+        for rec in records:
+            fh.write(json.dumps(rec) + "\n")
         fh.write(json.dumps({
-            "kind": "shot_meta", "arm": "langgraph-docker", "mode": "seq",
+            "kind": "shot_meta", "arm": "langgraph-docker", "mode": mode,
             "n_docs": len(corpus), "span_s": round(span, 2),
-            "timeout_s": TIMEOUT_S, "concurrency": 1,
+            "timeout_s": TIMEOUT_S,
+            "offered_concurrency": offered,
+            # What the service was TOLD vs what it actually runs: /meta reports
+            # EXECUTOR_WORKERS, but nodes.py uses LangGraph's default executor,
+            # width min(32, os.cpu_count()+4) -- and cpu_count() sees host
+            # cores, not the cgroup quota. Recorded, never assumed equal.
+            "configured_concurrency_note":
+                "LG uses default executor min(32, cpu_count+4); /meta's "
+                "executor_workers is reported but inert",
+            "mono_offset_ns": mono_offset_ns,
         }) + "\n")
-    print(f"done in {span:.1f}s -> {out / 'per_doc.jsonl'}")
+    ok = sum(1 for r in records if r.get("ok"))
+    print(f"done in {span:.1f}s  mode={mode} offered={offered}  "
+          f"ok={ok}/{len(records)} -> {out / 'per_doc.jsonl'}")
 
 
 if __name__ == "__main__":
