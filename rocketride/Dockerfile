@@ -38,6 +38,29 @@ RUN mkdir -p "$ENGINE_DIR" \
     && echo "${ENGINE_SHA256}  ${ENGINE_DIR}/engine" | sha256sum -c - \
     && chmod +x "$ENGINE_DIR/engine"
 
+# ---------------------------------------------------------------------------
+# WORKAROUND for a RocketRide engine bug (present in 3.3.0 AND 3.3.1).
+#
+# ai/common/models/gliner/requirements_gliner.txt pins:
+#     onnxruntime-gpu==1.20.1 ; platform_system != 'Darwin'
+#     onnxruntime==1.20.1     ; platform_system == 'Darwin'
+#
+# onnxruntime-gpu 1.20.1 WAS NEVER PUBLISHED to PyPI (1.20.0 and 1.20.2 exist);
+# onnxruntime 1.20.1 does exist. So the Darwin branch resolves and the Linux
+# branch cannot. The engine compiles ALL requirements files at boot, so this
+# unsatisfiable pin -- in an OPT-IN NER feature this benchmark never loads --
+# makes the engine fail to start on ANY Linux host:
+#     Failed to compile constraints: no solution found ... onnxruntime-gpu==1.20.1
+#
+# Bumping only that pin to the nearest published patch. Nothing else is
+# touched, and the pipeline under test never imports GLiNER. Remove once
+# upstream fixes it. See aws_run/FINDING_rr_linux_boot.md.
+RUN find "$ENGINE_DIR/ai" -name 'requirements*.txt' -exec \
+      sed -i 's/onnxruntime-gpu==1\.20\.1/onnxruntime-gpu==1.20.2/g' {} + \
+    && echo "patched onnxruntime-gpu pin:" \
+    && grep -rn "onnxruntime-gpu==" "$ENGINE_DIR/ai" || true
+# ---------------------------------------------------------------------------
+
 # Client SDK pinned to the version the probe was verified against.
 RUN pip install --no-cache-dir "rocketride==1.3.0"
 

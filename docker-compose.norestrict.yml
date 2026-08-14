@@ -1,0 +1,32 @@
+# Overlay that removes the equal-envelope CPU/memory caps.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.norestrict.yml up -d rocketride
+#
+# ⚠️  Runs made with this overlay are NOT cross-arm comparable, and are not
+# comparable with capped runs either. The base compose caps each arm at
+# 12 CPU / 10 GB precisely so neither framework can win by being handed more
+# machine. This overlay answers a different question -- "what does one arm do
+# with the whole box?" -- and any result from it must say so explicitly.
+#
+# Limits are set to the full c7i.8xlarge rather than removed, because a
+# compose overlay cannot unset a key. On a 32-vCPU / 61 GB box this is
+# equivalent to uncapped.
+services:
+  langgraph:
+    deploy:
+      resources:
+        limits:
+          cpus: "32.0"
+          memory: 58g
+  rocketride:
+    deploy:
+      resources:
+        limits:
+          cpus: "32.0"
+          memory: 58g
+  tika:
+    deploy:
+      resources:
+        limits:
+          cpus: "32.0"
+          memory: 58g
