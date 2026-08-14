@@ -117,6 +117,23 @@ python3 aws_run/box/smoke_report.py "$RUN1" "$RUN2" | tee "$RUN/report.txt"
 RC=${PIPESTATUS[0]}
 set -e
 
+# ------------------------------------------------------------------ 6. exfil
+# S3 is the ONLY way results leave the box (no scp, no port forwarding), and
+# the box auto-stops after 1 h idle. Uploading RAW records + sampler streams,
+# not just the report: every metric is re-derivable from those forever, and a
+# report alone cannot be recomputed or re-gated.
+S3_DEST="${BENCH_S3:-s3://rocketride-benchmark-data/leela/smoke}/$STAMP/"
+if aws sts get-caller-identity >/dev/null 2>&1; then
+  if aws s3 cp "$RUN/" "$S3_DEST" --recursive --only-show-errors; then
+    say "exfil OK -> $S3_DEST"
+    aws s3 ls "$S3_DEST" --recursive | tee "$RUN/s3_listing.txt"
+  else
+    say "WARNING: S3 upload failed — results exist ONLY on this box's disk"
+  fi
+else
+  say "WARNING: no instance role — skipping S3. Results are ONLY on box disk at $RUN"
+fi
+
 say "evidence in $RUN"
 ls -la "$RUN" "$RUN1"
 echo

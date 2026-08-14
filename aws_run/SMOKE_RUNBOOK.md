@@ -97,6 +97,27 @@ Everything lands in `aws_run/evidence/smoke_<UTC-stamp>/`:
 
 Paste `report.txt` back and I will analyse it.
 
+### Where it all lives
+
+| Location | What |
+|---|---|
+| `~/bench_langgraph_prod/aws_run/evidence/smoke_<UTC>/` | everything above, **on the box's disk** |
+| `~/smoke_corpus/` + `~/govdocs_000.zip` | the 10 PDFs and the cached archive |
+| `s3://rocketride-benchmark-data/leela/smoke/<UTC>/` | the same tree, uploaded at the end of the run — **the only copy that survives the box** |
+| git | **nothing.** `aws_run/evidence/smoke_*/` is git-ignored: raw run data goes to S3, never into the repo |
+
+Box disk survives an auto-stop, so results are not lost if the box shuts down —
+but there is no scp, so S3 is the only way to get them onto your Mac. Override
+the bucket with `BENCH_S3=s3://other/prefix`. To pull a run down locally:
+
+```bash
+aws s3 cp s3://rocketride-benchmark-data/leela/smoke/<UTC>/ ./run --recursive --profile leela
+python3 aws_run/box/smoke_report.py ./run/pass1 ./run/pass2   # recompute locally
+```
+
+That recompute is the real proof the exfil was complete: if the numbers
+reproduce from the downloaded records, nothing essential was left behind.
+
 ## Step 5 — Stop the box
 
 ```bash
