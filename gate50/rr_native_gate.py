@@ -20,8 +20,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 URI = "ws://127.0.0.1:5565/task/service"
 APIKEY = "local-dev"
-OUT = ROOT / "gate50" / "out_rr"
-CORPUS = sorted((ROOT / "datasets" / "govdocs").glob("*.pdf"))[:50]
+import sys as _sys
+_args = dict(enumerate(_sys.argv))
+OUT = Path(_args.get(2) or ROOT / "gate50" / "out_rr")
+CORPUS = sorted(Path(_args.get(1) or ROOT / "datasets" / "govdocs").glob("*.pdf"))[:int(_args.get(4) or 50)]
+MODE = _args.get(3, "blast")  # blast | seq | c<N>
 WARMUP_DOC = ROOT / "rocketride" / "data" / "probe" / "sample.pdf"
 PARITY_TXT = ROOT / "rocketride" / "data" / "probe" / "parity_fixture.txt"
 POOL = 8
@@ -146,8 +149,22 @@ async def main():
                 os.fsync(fh.fileno())
                 print(f"[rr-native] {state['n']}/50", flush=True)
 
+    limit = None
+    if MODE == "seq":
+        limit = 1
+    elif MODE.startswith("c") and MODE[1:].isdigit():
+        limit = int(MODE[1:])
+    sem = asyncio.Semaphore(limit) if limit else None
+
+    async def gated(i, p):
+        if sem:
+            async with sem:
+                await one(i, p)
+        else:
+            await one(i, p)
+
     t0 = time.perf_counter_ns()
-    await asyncio.gather(*[one(i, p) for i, p in enumerate(CORPUS)])
+    await asyncio.gather(*[gated(i, p) for i, p in enumerate(CORPUS)])
     span = (time.perf_counter_ns() - t0) / 1e9
 
     # parity fixture (uncounted)
@@ -163,7 +180,7 @@ async def main():
     (OUT / "parity_vector.json").write_text(json.dumps({"vector": parity}))
 
     meta = {"kind": "shot_meta", "arm": "rocketride-native-3.3.1",
-            "mode": "blast", "n_docs": len(CORPUS), "pool": POOL,
+            "mode": MODE, "n_docs": len(CORPUS), "pool": POOL,
             "span_s": round(span, 2), "timeout_s": TIMEOUT_S}
     fh.write(json.dumps(meta) + "\n")
     fh.close()

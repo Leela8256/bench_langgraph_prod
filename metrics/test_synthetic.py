@@ -73,6 +73,11 @@ def main() -> int:
     )
     if fi["all_errors_surfaced"] is not True:
         fails.append(f"error surfacing wrong: {fi}")
+
+    # success-shaped empty (no_documents) must count as NOT server-surfaced
+    fi_ns = fault_isolation([rec("F2", 0, 1, ok=False, reason="no_documents")], ["F2"])
+    if fi_ns["all_errors_surfaced"] is not False:
+        fails.append(f"no_documents should be silent-from-server: {fi_ns}")
     if fi["service_continued"] is not True:
         fails.append("service_continued should be True")
     if fi["resource_recovery"]["recovered"] is not True:

@@ -52,8 +52,23 @@ def fault_isolation(rows: List[Dict], fault_docs: List[str],
     """M5: surfacing / continuity / restart / resource recovery."""
     fault_set = set(fault_docs)
     frecs = [r for r in rows if r["doc"] in fault_set]
-    surfaced = {r["doc"]: bool(r.get("error") or r.get("reason") not in (None, "completed"))
+    # SERVER-surfaced means the service itself communicated failure (an HTTP
+    # error status or an error frame). A success-shaped empty response
+    # ("no_documents") is NOT server-surfaced — only the client's completion
+    # proof inferred the failure. Both flags are reported.
+    def _server_surfaced(r):
+        if r.get("http_status") and r["http_status"] >= 400:
+            return True
+        if r.get("reason") in ("no_documents",):
+            return False  # success-shaped empty: silent from the server
+        if r.get("reason") in ("transport_error",):
+            return True
+        return bool(r.get("error")) and r.get("reason") not in ("completed", None)
+
+    surfaced = {r["doc"]: _server_surfaced(r)
                 for r in frecs if not r.get("ok")}
+    client_inferred = {r["doc"]: (not _server_surfaced(r))
+                       for r in frecs if not r.get("ok")}
     unrelated_ok = len([r for r in ok_records(rows) if r["doc"] not in fault_set])
     unrelated_total = len([r for r in rows if r["doc"] not in fault_set])
     res = {}
@@ -61,9 +76,12 @@ def fault_isolation(rows: List[Dict], fault_docs: List[str],
         growth = (resources_after.get("rss_mb", {}).get("end", 0)
                   - resources_before.get("rss_mb", {}).get("start", 0))
         res = {"rss_growth_mb": round(growth, 1),
-               "recovered": abs(growth) < rss_tolerance_mb}
+               "recovered": abs(growth) < rss_tolerance_mb,
+               "caveat": "valid only with pre/post-FAULT baselines; "
+                         "run-boundary baselines conflate warmup growth"}
     return {
-        "error_surfaced_per_fault": surfaced,
+        "error_surfaced_by_server": surfaced,
+        "failure_only_inferred_by_client": client_inferred,
         "all_errors_surfaced": all(surfaced.values()) if surfaced else None,
         "service_continued": unrelated_ok == unrelated_total,
         "unrelated_ok": f"{unrelated_ok}/{unrelated_total}",
