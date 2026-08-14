@@ -86,21 +86,40 @@ async def main():
 
     client = RocketRideClient(uri=URI, auth=APIKEY)
     await client.connect()
+    # NOTE: `threads` is deliberately NOT passed. The engine chooses its own
+    # pool size, and that is what is being measured. Recorded in shot_meta as
+    # threads_requested=null so the run can never be read as "we configured N".
     used = await client.use(filepath=str(pipe_path), use_existing=True, ttl=7200)
     token = used["token"]
     print(f"[rr] pipeline up, token={token}", flush=True)
 
-    # Uncounted warm-up: the first document through a cold pipe pays engine
-    # spin-up. Excluding it here is separate from M1's warm_n window.
-    up = await asyncio.wait_for(
-        client.send_files([(str(WARMUP_DOC), {"doc_id": "warm"})], token),
-        timeout=120)
-    ok, why = verify(documents_from(up))
-    if not ok:
-        raise SystemExit(f"WARMUP FAILED: {why}")
-    print("[rr] warmup ok", flush=True)
-
     mode = sys.argv[4] if len(sys.argv) > 4 else "seq"
+    warm_docs = int(sys.argv[5]) if len(sys.argv) > 5 else 0
+
+    # Warm-start: WARM_DOCS real documents pushed through before the measured
+    # span, timed separately and excluded. One tiny fixture is not enough --
+    # a cold engine pays model load, JIT and cache fill, and with an unknown
+    # pool size a single document leaves most workers cold at t=0.
+    warm_s = None
+    if warm_docs > 0:
+        warm_set = corpus[:warm_docs]
+        tw = time.perf_counter_ns()
+        await asyncio.wait_for(
+            client.send_files([(str(p), {"doc_id": f"warm-{p.stem}"})
+                               for p in warm_set], token),
+            timeout=TIMEOUT_S)
+        warm_s = (time.perf_counter_ns() - tw) / 1e9
+        print(f"[rr] warm-start: {len(warm_set)} docs in {warm_s:.1f}s "
+              f"(excluded from measurement)", flush=True)
+    else:
+        up = await asyncio.wait_for(
+            client.send_files([(str(WARMUP_DOC), {"doc_id": "warm"})], token),
+            timeout=120)
+        ok, why = verify(documents_from(up))
+        if not ok:
+            raise SystemExit(f"WARMUP FAILED: {why}")
+        print("[rr] warmup ok (1 fixture doc)", flush=True)
+
     if mode == "seq":
         offered = 1
     elif mode == "blast":
@@ -192,12 +211,23 @@ async def main():
             "timeout_s": TIMEOUT_S,
             "offered_concurrency": offered,
             "client_pool": len(pool),
+            "threads_requested": None,
+            "warm_docs": warm_docs,
+            "warm_s": round(warm_s, 3) if warm_s is not None else None,
             "configured_concurrency_note":
-                "engine threadCount is engine-internal; recorded from the "
-                "engine probe, never assumed from config",
+                "use() called WITHOUT threads= — the engine's own default pool "
+                "is what is under test. Never report a configured value here.",
             "mono_offset_ns": mono_offset_ns,
         }) + "\n")
 
+    # terminate() before disconnect: disconnecting alone leaves the pipeline and
+    # its backend running, and a surviving backend holds RSS that starves the
+    # next run. Best-effort — a wedged backend may not reap, which is itself
+    # worth seeing in the engine log.
+    try:
+        await client.terminate(token)
+    except Exception as exc:
+        print(f"[rr] terminate failed: {type(exc).__name__}: {exc}", flush=True)
     for c in pool:
         try:
             await c.disconnect()

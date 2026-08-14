@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# RocketRide arm only — blast, 150 docs, 1 rep, NO CPU/memory caps.
+# RocketRide arm only — blast, 200 docs, 25 warm-start docs, 1 rep, NO caps.
 #
 # ⚠️  Uncapped by request. The result is NOT comparable with the capped
 # LangGraph blast run (12 CPU / 10 GB) or with any future capped run. It
@@ -15,8 +15,9 @@ set -euo pipefail
 ROOT="$(git rev-parse --show-toplevel)"; cd "$ROOT"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 RUN="$ROOT/aws_run/evidence/rr_$STAMP"
-CORPUS="${SMOKE_CORPUS:-$HOME/smoke_corpus150}"
-N="${SMOKE_N:-150}"
+CORPUS="${SMOKE_CORPUS:-$HOME/smoke_corpus200}"
+N="${SMOKE_N:-200}"
+WARM="${WARM_DOCS:-25}"
 RR=prodbench-rocketride
 COMPOSE="-f docker-compose.yml -f docker-compose.norestrict.yml"
 mkdir -p "$RUN/rr/rep1"
@@ -32,6 +33,7 @@ have=$(find "$CORPUS" -name '*.pdf' | wc -l | tr -d ' ')
   echo "docker=$(docker version --format '{{.Server.Version}}')"
   echo "git_sha=$(git rev-parse HEAD)"
   echo "corpus=$CORPUS"; echo "n_docs=$N"; echo "reps=1"; echo "mode=blast"
+  echo "warm_docs=$WARM"; echo "threads_requested=NONE (engine default)"
   echo "cpu_cap=NONE (norestrict overlay)"; echo "arm=rocketride-only"
 } > "$RUN/environment.txt"
 cp "$CORPUS/SHA256SUMS" "$RUN/corpus.sha256" 2>/dev/null || true
@@ -80,13 +82,13 @@ docker cp aws_run/box/rr_smoke_driver.py "$RR:/work/rr_smoke_driver.py"
 say "copying $N PDFs into the container"
 docker cp "$CORPUS/." "$RR:/work/corpus/"
 
-say "blast: $N docs, 1 rep"
+say "blast: $N docs, 1 rep, warm-start $WARM docs (excluded)"
 docker exec -e SAMPLE_MAX_S=5400 -i "$RR" python3 - < aws_run/box/cgroup_sampler.py \
   > "$RUN/rr/rep1/sampler.jsonl" 2>"$RUN/rr/rep1/sampler.err" &
 S=$!
 sleep 2
 set +e
-docker exec "$RR" python3 /work/rr_smoke_driver.py /work/corpus /work/out1 "$N" blast
+docker exec "$RR" python3 /work/rr_smoke_driver.py /work/corpus /work/out1 "$N" blast "$WARM"
 DRV=$?
 set -e
 sleep 2
