@@ -22,9 +22,14 @@ ENV ENGINE_DIR=/opt/rocketride/engine \
 # tarball — that is what the prior benchmark harness pins, and it is the
 # artifact that actually determines behavior. The tarball is flat (ai/,
 # engine, lib/, nodes/, ...), so do NOT strip components.
-ARG ENGINE_VERSION=3.2.1
-ARG ENGINE_URL=https://github.com/rocketride-org/rocketride-server/releases/download/server-v3.2.1/rocketride-server-v3.2.1-linux-x64.tar.gz
-ARG ENGINE_SHA256=cf1fbf9ce72d15fef0257daaf0bfef130a263535be08c7160a0e0dada0371316
+#
+# 3.3.1 (was 3.2.1): the Mac cross-arm validation — chunk hashes matching the
+# LG-tika arm byte-exactly — was done against native 3.3.1. Building 3.2.1 here
+# would mean the box engine is not the engine that work validated. SHA is of
+# the extracted linux-x64 `engine` binary, verified 2026-08-14.
+ARG ENGINE_VERSION=3.3.1
+ARG ENGINE_URL=https://github.com/rocketride-org/rocketride-server/releases/download/server-v3.3.1/rocketride-server-v3.3.1-linux-x64.tar.gz
+ARG ENGINE_SHA256=95768e2640df2d34dd6dfea2e456f36da03ad80b091f9d057c116dfe748d9747
 
 RUN mkdir -p "$ENGINE_DIR" \
     && curl -fsSL "$ENGINE_URL" -o /tmp/engine.tgz \

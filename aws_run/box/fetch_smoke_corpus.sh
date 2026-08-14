@@ -14,33 +14,55 @@
 set -euo pipefail
 DEST="${1:-$HOME/smoke_corpus}"
 N="${2:-10}"
-ZIP_URL="https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles/000.zip"
-CACHE="$HOME/govdocs_000.zip"
+BASE="https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles"
 
+# One archive holds ~1000 mixed-type files, of which only a fraction are PDFs,
+# so larger N may span several. Archives are consumed in order and cached, and
+# selection stays sorted-by-basename across all of them -- the same rule
+# gate-50 uses, so doc identity is stable no matter how many archives it took.
 mkdir -p "$DEST"
-if [ ! -s "$CACHE" ]; then
-  echo "downloading govdocs 000.zip (one archive, several hundred MB; cached)"
-  curl -fsSL --max-time 1800 "$ZIP_URL" -o "$CACHE"
-fi
-echo "zip: $(du -h "$CACHE" | cut -f1)"
-
 rm -f "$DEST"/*.pdf
-python3 - "$CACHE" "$DEST" "$N" <<'PY'
+CACHES=()
+for idx in 000 001 002 003 004; do
+  CACHE="$HOME/govdocs_${idx}.zip"
+  if [ ! -s "$CACHE" ]; then
+    echo "downloading govdocs ${idx}.zip (cached after first use)"
+    curl -fsSL --max-time 1800 "$BASE/${idx}.zip" -o "$CACHE"
+  fi
+  CACHES+=("$CACHE")
+  have=$(python3 - "$N" "${CACHES[@]}" <<'PY'
 import sys, zipfile, pathlib
+n, caches = int(sys.argv[1]), sys.argv[2:]
+seen = set()
+for c in caches:
+    with zipfile.ZipFile(c) as z:
+        seen.update(pathlib.PurePosixPath(i.filename).name
+                    for i in z.infolist()
+                    if i.filename.lower().endswith(".pdf") and not i.is_dir())
+print(len(seen))
+PY
+)
+  echo "  archives so far: ${#CACHES[@]}, PDFs available: $have (need $N)"
+  [ "$have" -ge "$N" ] && break
+done
 
-cache, dest, n = sys.argv[1], pathlib.Path(sys.argv[2]), int(sys.argv[3])
-with zipfile.ZipFile(cache) as z:
-    # Sort by BASENAME so the selection matches gate-50's sorted(*.pdf)[:N]
-    # regardless of how the archive nests paths.
-    pdfs = sorted((i for i in z.infolist()
-                   if i.filename.lower().endswith(".pdf") and not i.is_dir()),
-                  key=lambda i: pathlib.PurePosixPath(i.filename).name)
-    if len(pdfs) < n:
-        sys.exit(f"FATAL: only {len(pdfs)} PDFs in archive, need {n}")
-    for info in pdfs[:n]:
-        name = pathlib.PurePosixPath(info.filename).name
+python3 - "$DEST" "$N" "${CACHES[@]}" <<'PY'
+import sys, zipfile, pathlib
+dest, n, caches = pathlib.Path(sys.argv[1]), int(sys.argv[2]), sys.argv[3:]
+found = {}
+for c in caches:
+    with zipfile.ZipFile(c) as z:
+        for i in z.infolist():
+            if i.filename.lower().endswith(".pdf") and not i.is_dir():
+                name = pathlib.PurePosixPath(i.filename).name
+                found.setdefault(name, (c, i))
+if len(found) < n:
+    sys.exit(f"FATAL: only {len(found)} PDFs across {len(caches)} archives, need {n}")
+for name in sorted(found)[:n]:
+    c, info = found[name]
+    with zipfile.ZipFile(c) as z:
         (dest / name).write_bytes(z.read(info))
-        print(f"  {name}  {info.file_size:,} bytes")
+print(f"extracted {n} PDFs from {len(caches)} archive(s)")
 PY
 
 cd "$DEST"
