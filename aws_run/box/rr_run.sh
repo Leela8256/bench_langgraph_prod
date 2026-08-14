@@ -60,6 +60,21 @@ docker logs "$RR" > "$RUN/engine_boot.log" 2>&1
 docker exec "$RR" sh -c 'sha256sum /opt/rocketride/engine/engine' > "$RUN/engine_sha.txt"
 say "engine binary: $(cat "$RUN/engine_sha.txt")"
 
+# Does host -> container WebSocket work now that the engine binds 0.0.0.0?
+# CONTEXT_SNAPSHOT 4.6 recorded this failing and filed it as a product defect;
+# the engine was very likely just never told to bind an external interface.
+# Recording the answer either retracts that finding or confirms it properly.
+say "testing host->container reachability on :5565"
+python3 - > "$RUN/host_ws_probe.txt" 2>&1 <<'PY' || true
+import socket, json
+r = {}
+s = socket.socket(); s.settimeout(5)
+r["tcp_connect_host_to_published_port"] = (s.connect_ex(("127.0.0.1", 5565)) == 0)
+s.close()
+print(json.dumps(r))
+PY
+say "host reachability: $(cat "$RUN/host_ws_probe.txt")"
+
 docker exec "$RR" mkdir -p /work/corpus /work/out1
 docker cp aws_run/box/rr_smoke_driver.py "$RR:/work/rr_smoke_driver.py"
 say "copying $N PDFs into the container"

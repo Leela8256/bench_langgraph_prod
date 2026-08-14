@@ -27,7 +27,17 @@ The container then exits. No pipeline is ever served.
 
 ## Root cause
 
-`ai/common/models/gliner/requirements_gliner.txt`, lines 7-8:
+The pin appears in **five** requirements files, spanning `ai/` and `nodes/`:
+
+```
+ai/common/models/audio/requirements_whisper.txt:9
+ai/common/models/vision/requirements_pose.txt:8
+ai/common/models/gliner/requirements_gliner.txt:7
+nodes/audio_transcribe/requirements.txt:10
+nodes/anonymize/requirements.txt:4
+```
+
+each carrying:
 
 ```
 onnxruntime-gpu==1.20.1; platform_system != 'Darwin'

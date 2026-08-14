@@ -32,9 +32,17 @@ ARG ENGINE_URL=https://github.com/rocketride-org/rocketride-server/releases/down
 ARG ENGINE_SHA256=95768e2640df2d34dd6dfea2e456f36da03ad80b091f9d057c116dfe748d9747
 
 RUN mkdir -p "$ENGINE_DIR" \
-    && curl -fsSL "$ENGINE_URL" -o /tmp/engine.tgz \
+    && curl -fsSL --retry 3 "$ENGINE_URL" -o /tmp/engine.tgz \
     && tar -xzf /tmp/engine.tgz -C "$ENGINE_DIR" \
     && rm /tmp/engine.tgz \
+    # Some release tarballs nest a top-level dir; flatten if so (from Ansh's
+    # image). Runs before the checksum so the hash is always taken at the
+    # same path regardless of archive layout.
+    && if [ ! -f "$ENGINE_DIR/engine" ]; then \
+         inner="$(find "$ENGINE_DIR" -maxdepth 2 -name engine -type f | head -1)"; \
+         [ -n "$inner" ] && mv "$(dirname "$inner")"/. "$ENGINE_DIR"/ 2>/dev/null || true; \
+       fi \
+    && test -f "$ENGINE_DIR/engine" && test -f "$ENGINE_DIR/ai/eaas.py" \
     && echo "${ENGINE_SHA256}  ${ENGINE_DIR}/engine" | sha256sum -c - \
     && chmod +x "$ENGINE_DIR/engine"
 
@@ -55,10 +63,22 @@ RUN mkdir -p "$ENGINE_DIR" \
 # Bumping only that pin to the nearest published patch. Nothing else is
 # touched, and the pipeline under test never imports GLiNER. Remove once
 # upstream fixes it. See aws_run/FINDING_rr_linux_boot.md.
-RUN find "$ENGINE_DIR/ai" -name 'requirements*.txt' -exec \
+# The pin appears in FIVE requirements files, across BOTH ai/ and nodes/:
+#   ai/common/models/{audio/requirements_whisper,vision/requirements_pose,
+#                     gliner/requirements_gliner}.txt
+#   nodes/{audio_transcribe,anonymize}/requirements.txt
+# All must move together -- patching only some produces a WORSE failure,
+# "you require ==1.20.1 and ==1.20.2", because constraint compilation is
+# global across every requirements file in the tree.
+# Scope is every *.txt (matching Ansh's image), not just requirements*.txt, so
+# a pin in any constraints-style file is caught too. find -exec rather than
+# `grep -rl | xargs sed`: once upstream fixes the pin, grep matches nothing and
+# bare xargs would run sed with no file, blocking on stdin and hanging the build.
+RUN find "$ENGINE_DIR" -name '*.txt' -exec \
       sed -i 's/onnxruntime-gpu==1\.20\.1/onnxruntime-gpu==1.20.2/g' {} + \
-    && echo "patched onnxruntime-gpu pin:" \
-    && grep -rn "onnxruntime-gpu==" "$ENGINE_DIR/ai" || true
+    && echo "--- onnxruntime-gpu pins after patch (must all be 1.20.2):" \
+    && (grep -rn "onnxruntime-gpu==" "$ENGINE_DIR" --include='*.txt' || true) \
+    && ! grep -rq "onnxruntime-gpu==1\.20\.1" "$ENGINE_DIR" --include='*.txt'
 # ---------------------------------------------------------------------------
 
 # Client SDK pinned to the version the probe was verified against.
