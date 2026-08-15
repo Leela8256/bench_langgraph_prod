@@ -77,6 +77,10 @@ print(json.dumps(r))
 PY
 say "host reachability: $(cat "$RUN/host_ws_probe.txt")"
 
+# Clear out1 FIRST: if the driver dies, docker cp would otherwise copy a
+# previous run's per_doc.jsonl and the report would silently describe
+# the wrong run (this happened -- stale file, wrong client_pool).
+docker exec "$RR" rm -rf /work/out1
 docker exec "$RR" mkdir -p /work/corpus /work/out1
 docker cp aws_run/box/rr_smoke_driver.py "$RR:/work/rr_smoke_driver.py"
 say "copying $N PDFs into the container"
@@ -94,6 +98,7 @@ set -e
 sleep 2
 kill "$S" 2>/dev/null || true; wait "$S" 2>/dev/null || true
 say "driver rc=$DRV"
+[ "$DRV" -eq 0 ] || say "WARNING: driver FAILED (rc=$DRV) — any records below are suspect"
 
 docker cp "$RR:/work/out1/per_doc.jsonl" "$RUN/rr/rep1/per_doc.jsonl" || true
 docker cp "$RR:/work/out1/manifest.json" "$RUN/rr/rep1/manifest.json" || true

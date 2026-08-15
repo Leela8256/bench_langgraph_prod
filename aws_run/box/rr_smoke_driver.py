@@ -315,11 +315,13 @@ async def main():
         # 5.8-6.0 effective cores across pool=8, pool=11 and threads=32, while
         # the comparable Haystack-suite run reaches 24.28 by batching.
         payload = [(str(p), {"doc_id": p.stem}) for p in corpus]
-        out = await asyncio.wait_for(client.send_files(payload, token),
-                                     timeout=BATCH_TIMEOUT_S)
+        # NOT `out`: that name is the output DIRECTORY (a Path) and rebinding
+        # it turns the later `out / "per_doc.jsonl"` into list / str.
+        batch_result = await asyncio.wait_for(client.send_files(payload, token),
+                                              timeout=BATCH_TIMEOUT_S)
         span = (time.perf_counter_ns() - t0) / 1e9
-        records = records_from_batch(corpus, out, t0, mono_offset_ns)
-        returned = len(out) if isinstance(out, list) else 1
+        records = records_from_batch(corpus, batch_result, t0, mono_offset_ns)
+        returned = len(batch_result) if isinstance(batch_result, list) else 1
         matched = sum(1 for r in records if r.get("reason") != "no_response_for_file")
         print(f"[rr] batch returned {returned} items for {len(corpus)} files; "
               f"{matched} attributed by filepath", flush=True)
