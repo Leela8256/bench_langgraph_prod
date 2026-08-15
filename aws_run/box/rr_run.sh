@@ -33,7 +33,7 @@ have=$(find "$CORPUS" -name '*.pdf' | wc -l | tr -d ' ')
   echo "docker=$(docker version --format '{{.Server.Version}}')"
   echo "git_sha=$(git rev-parse HEAD)"
   echo "corpus=$CORPUS"; echo "n_docs=$N"; echo "reps=1"; echo "mode=blast"
-  echo "warm_docs=$WARM"; echo "threads_requested=NONE (engine default)"
+  echo "warm_docs=$WARM"; echo "threads_requested=${RR_THREADS:-NONE (engine default)}"
   echo "cpu_cap=NONE (norestrict overlay)"; echo "arm=rocketride-only"
 } > "$RUN/environment.txt"
 cp "$CORPUS/SHA256SUMS" "$RUN/corpus.sha256" 2>/dev/null || true
@@ -88,7 +88,7 @@ docker exec -e SAMPLE_MAX_S=5400 -i "$RR" python3 - < aws_run/box/cgroup_sampler
 S=$!
 sleep 2
 set +e
-docker exec -e RR_POOL_MAX="${RR_POOL_MAX:-0}" "$RR" python3 /work/rr_smoke_driver.py /work/corpus /work/out1 "$N" blast "$WARM"
+docker exec -e RR_POOL_MAX="${RR_POOL_MAX:-0}" -e RR_THREADS="${RR_THREADS:-}" "$RR" python3 /work/rr_smoke_driver.py /work/corpus /work/out1 "$N" blast "$WARM"
 DRV=$?
 set -e
 sleep 2

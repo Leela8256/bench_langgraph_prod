@@ -86,14 +86,27 @@ async def main():
     pipe_path = out / "pipeline.pipe"
     pipe_path.write_text(json.dumps(pipe))
 
+    # RR_THREADS unset -> the engine's own default pool (what an untuned
+    # deployment gets). Set -> that pool size is requested explicitly.
+    #
+    # Two prior runs measured ~5.8-5.9 effective cores on a 32-core box with
+    # 372-399 threads alive and client concurrency of 8 then 11 -- parallelism
+    # did not move, so the limiter is the engine's pool, not the client. The
+    # comparable Haystack-suite run passes threads=<host cores> and reaches
+    # 24.28 cores at 76% CPU. This makes that the variable under test.
+    rr_threads = os.environ.get("RR_THREADS")
+    threads = int(rr_threads) if rr_threads else None
+
     client = RocketRideClient(uri=URI, auth=APIKEY)
     await client.connect()
-    # NOTE: `threads` is deliberately NOT passed. The engine chooses its own
-    # pool size, and that is what is being measured. Recorded in shot_meta as
-    # threads_requested=null so the run can never be read as "we configured N".
-    used = await client.use(filepath=str(pipe_path), use_existing=True, ttl=7200)
+    use_kwargs = dict(filepath=str(pipe_path), use_existing=True, ttl=7200)
+    if threads:
+        use_kwargs["threads"] = threads
+    used = await client.use(**use_kwargs)
     token = used["token"]
-    print(f"[rr] pipeline up, token={token}", flush=True)
+    print(f"[rr] pipeline up, token={token}, "
+          f"threads_requested={threads if threads else 'NONE (engine default)'}",
+          flush=True)
 
     mode = sys.argv[4] if len(sys.argv) > 4 else "seq"
     warm_docs = int(sys.argv[5]) if len(sys.argv) > 5 else 0
@@ -233,12 +246,12 @@ async def main():
             "offered_concurrency": offered,
             "client_pool": len(pool),
             "client_pool_cap": None if POOL_MAX >= 10 ** 9 else POOL_MAX,
-            "threads_requested": None,
+            "threads_requested": threads,
             "warm_docs": warm_docs,
             "warm_s": round(warm_s, 3) if warm_s is not None else None,
             "configured_concurrency_note":
-                "use() called WITHOUT threads= — the engine's own default pool "
-                "is what is under test. Never report a configured value here.",
+                "threads_requested is what was ASKED FOR; the engine pool actually "
+                "used is not observable from here — never conflate the two.",
             "mono_offset_ns": mono_offset_ns,
         }) + "\n")
 
