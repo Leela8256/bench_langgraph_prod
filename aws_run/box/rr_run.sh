@@ -88,7 +88,7 @@ docker exec -e SAMPLE_MAX_S=5400 -i "$RR" python3 - < aws_run/box/cgroup_sampler
 S=$!
 sleep 2
 set +e
-docker exec "$RR" python3 /work/rr_smoke_driver.py /work/corpus /work/out1 "$N" blast "$WARM"
+docker exec -e RR_POOL_MAX="${RR_POOL_MAX:-0}" "$RR" python3 /work/rr_smoke_driver.py /work/corpus /work/out1 "$N" blast "$WARM"
 DRV=$?
 set -e
 sleep 2

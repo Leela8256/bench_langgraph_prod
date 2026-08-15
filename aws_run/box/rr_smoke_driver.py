@@ -18,6 +18,7 @@ Sequential closed-loop to match the LangGraph arm -- true service latency.
 import asyncio
 import hashlib
 import json
+import os
 import sys
 import time
 import uuid
@@ -29,9 +30,10 @@ PIPE_SRC = Path("/work/benchmark_pdf.pipe")
 WARMUP_DOC = Path("/work/data/probe/sample.pdf")
 TIMEOUT_S = 300
 EMBED_DIM = 384
-# Client sockets, not offered concurrency. gate-50 used 8; going higher risks
-# measuring the client's socket handling instead of the engine.
-POOL_MAX = 8
+# Client sockets, not offered concurrency. Default 0 = no client-side cap
+# (one socket per in-flight doc), so the engine's scheduler is the only
+# limiter. Set RR_POOL_MAX to reimpose one.
+POOL_MAX = int(os.environ.get("RR_POOL_MAX", "0")) or 10 ** 9
 
 
 def documents_from(result):
@@ -134,18 +136,37 @@ async def main():
     # throughput window.
     mono_offset_ns = time.time_ns() - time.perf_counter_ns()
 
-    # A pool of clients, not one: a single WebSocket serialises its own
-    # requests, so concurrency would be a fiction. Pool is capped -- one client
-    # per doc at blast would open 150 sockets and measure the client, not the
-    # engine.
+    # Client socket pool. Each send_files() call appears to occupy its
+    # connection for the round trip, so the pool -- not `offered` -- is the
+    # real concurrency ceiling. The 200-doc run at pool=8 measured a 290.7 s
+    # span, and 200/8 x 11.2 s (its own p50) = 280 s: the client was the
+    # limiter, not the engine. Default is now NO client-side cap, so the
+    # engine's own scheduling is what is under test.
     pool_size = min(offered, POOL_MAX)
     pool = [client]
-    for _ in range(pool_size - 1):
+
+    async def add_client():
         c = RocketRideClient(uri=URI, auth=APIKEY)
         await c.connect()
+        # use_existing + the same project_id: all clients attach to the ONE
+        # pipeline instance rather than each spawning a backend.
         await c.use(filepath=str(pipe_path), use_existing=True, ttl=7200)
-        pool.append(c)
-    print(f"[rr] mode={mode} offered={offered} pool={len(pool)}", flush=True)
+        return c
+
+    if pool_size > 1:
+        t_pool = time.perf_counter_ns()
+        # Concurrently: 200 sequential connect+use round trips would take
+        # longer than the measured span itself.
+        extra = await asyncio.gather(*[add_client() for _ in range(pool_size - 1)],
+                                     return_exceptions=True)
+        failed = [e for e in extra if isinstance(e, Exception)]
+        pool.extend([c for c in extra if not isinstance(c, Exception)])
+        print(f"[rr] pool: {len(pool)} clients in "
+              f"{(time.perf_counter_ns() - t_pool) / 1e9:.1f}s"
+              + (f" ({len(failed)} failed: {type(failed[0]).__name__})" if failed else ""),
+              flush=True)
+    print(f"[rr] mode={mode} offered={offered} pool={len(pool)} "
+          f"(pool_cap={POOL_MAX})", flush=True)
 
     sem = asyncio.Semaphore(offered)
     done = [0]
@@ -211,6 +232,7 @@ async def main():
             "timeout_s": TIMEOUT_S,
             "offered_concurrency": offered,
             "client_pool": len(pool),
+            "client_pool_cap": None if POOL_MAX >= 10 ** 9 else POOL_MAX,
             "threads_requested": None,
             "warm_docs": warm_docs,
             "warm_s": round(warm_s, 3) if warm_s is not None else None,
