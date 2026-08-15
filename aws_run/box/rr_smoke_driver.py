@@ -29,6 +29,9 @@ APIKEY = "local-dev"
 PIPE_SRC = Path("/work/benchmark_pdf.pipe")
 WARMUP_DOC = Path("/work/data/probe/sample.pdf")
 TIMEOUT_S = 300
+# A batch of N documents legitimately takes far longer than one document, so
+# the per-doc timeout would abort a healthy run.
+BATCH_TIMEOUT_S = int(os.environ.get("RR_BATCH_TIMEOUT_S", "3600"))
 EMBED_DIM = 384
 # Client sockets, not offered concurrency. Default 0 = no client-side cap
 # (one socket per in-flight doc), so the engine's scheduler is the only
@@ -68,6 +71,73 @@ def verify(docs):
         if not all(x == x and abs(x) != float("inf") for x in v):
             return False, "non-finite"
     return True, ""
+
+
+def records_from_batch(corpus, out, t0_ns, mono_offset_ns):
+    """Per-doc records from ONE batched send_files() response.
+
+    Timing note, stated in every record: a batch has one submit instant and
+    one return instant, so there are no measured per-document timestamps.
+    submit_ns is the batch start (true -- every file WAS submitted then) and
+    completion_ns is derived from the engine's own per-file `upload_time`.
+    `timing_source` marks this so a derived value is never mistaken for a
+    measured one. The batch span itself is measured exactly, so M1 is exact;
+    only per-doc M2 is an approximation.
+
+    Attribution is by filepath basename, not list position: position-based
+    zip silently mis-credits work if the engine reorders. A file with no
+    matching response is recorded as a failure, never dropped.
+    """
+    items = out if isinstance(out, list) else [out]
+    by_name = {}
+    for it in items:
+        if isinstance(it, dict):
+            fp = it.get("filepath")
+            if isinstance(fp, str) and fp:
+                by_name.setdefault(Path(fp).name, it)
+
+    recs = []
+    for pdf in corpus:
+        it = by_name.get(pdf.name)
+        rec = {"doc": pdf.name, "arm": "rocketride-docker-3.3.1", "ok": False,
+               "input_sha256": hashlib.sha256(pdf.read_bytes()).hexdigest(),
+               "size_bytes": pdf.stat().st_size,
+               "submit_ns": t0_ns,
+               "timing_source": "batch_upload_time (derived, not measured)"}
+        if it is None:
+            rec["completion_ns"] = t0_ns
+            rec["identity_ok"] = False
+            rec["reason"] = "no_response_for_file"
+            recs.append(rec)
+            continue
+        ut = it.get("upload_time")
+        rec["completion_ns"] = t0_ns + int(float(ut) * 1e9) if isinstance(
+            ut, (int, float)) else t0_ns
+        rec["upload_time_s"] = ut
+        rec["identity_ok"] = True          # matched by filepath basename
+        docs = documents_from(it)
+        okv, why = verify(docs)
+        texts = [d.get("page_content", "") for d in docs]
+        rec["n_chunks"] = len(docs)
+        rec["total_chars"] = sum(len(t) for t in texts)
+        rec["chunk_sha256"] = [hashlib.sha256(t.encode("utf-8")).hexdigest()
+                               for t in texts]
+        rec["vector_dim"] = EMBED_DIM if okv else None
+        norms = [sum(x * x for x in (d.get("embedding") or [])) ** 0.5
+                 for d in docs]
+        rec["l2_norms_minmax"] = ([round(min(norms), 6), round(max(norms), 6)]
+                                  if norms else None)
+        rec["ok"] = bool(okv)
+        if rec["ok"]:
+            rec["reason"] = "completed"
+        elif not docs:
+            rec["reason"] = "no_documents"
+            rec["error_raw"] = json.dumps(it, default=str)[:400]
+        else:
+            rec["reason"] = "completion_proof_missing"
+            rec["error"] = why
+        recs.append(rec)
+    return recs
 
 
 async def main():
@@ -155,7 +225,10 @@ async def main():
     # span, and 200/8 x 11.2 s (its own p50) = 280 s: the client was the
     # limiter, not the engine. Default is now NO client-side cap, so the
     # engine's own scheduling is what is under test.
-    pool_size = min(offered, POOL_MAX)
+    # Blast issues ONE send_files() on ONE client, so a pool is pointless --
+    # and building one triggered 189 refused connections (the engine accepts
+    # ~11 concurrent). Only the per-doc modes need multiple sockets.
+    pool_size = 1 if mode == "blast" else min(offered, POOL_MAX)
     pool = [client]
 
     async def add_client():
@@ -233,8 +306,26 @@ async def main():
             return rec
 
     t0 = time.perf_counter_ns()
-    records = await asyncio.gather(*[one(i, p) for i, p in enumerate(corpus)])
-    span = (time.perf_counter_ns() - t0) / 1e9
+    if mode == "blast":
+        # ONE call carrying the whole backlog. The engine holds the batch and
+        # its own pool schedules it -- this is how the SDK is built to work
+        # (send_files gathers one coroutine per file, "let server handle
+        # queuing"). Submitting 200 single-file calls instead pins concurrency
+        # to the connection count, which the engine caps around 11: measured
+        # 5.8-6.0 effective cores across pool=8, pool=11 and threads=32, while
+        # the comparable Haystack-suite run reaches 24.28 by batching.
+        payload = [(str(p), {"doc_id": p.stem}) for p in corpus]
+        out = await asyncio.wait_for(client.send_files(payload, token),
+                                     timeout=BATCH_TIMEOUT_S)
+        span = (time.perf_counter_ns() - t0) / 1e9
+        records = records_from_batch(corpus, out, t0, mono_offset_ns)
+        returned = len(out) if isinstance(out, list) else 1
+        matched = sum(1 for r in records if r.get("reason") != "no_response_for_file")
+        print(f"[rr] batch returned {returned} items for {len(corpus)} files; "
+              f"{matched} attributed by filepath", flush=True)
+    else:
+        records = await asyncio.gather(*[one(i, p) for i, p in enumerate(corpus)])
+        span = (time.perf_counter_ns() - t0) / 1e9
 
     with open(out / "per_doc.jsonl", "w") as fh:
         for rec in records:
