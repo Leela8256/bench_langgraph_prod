@@ -20,8 +20,10 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")/.." && pwd)"; cd "$HERE"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 RUN="$HERE/results/${STAMP}_${MODE:-blast}"
-CORPUS="${CORPUS:-$HOME/bench_corpus}"
 N="${N:-200}"; REPS="${REPS:-3}"; WARM="${WARM:-25}"; MODE="${MODE:-blast}"
+# Corpus dir is derived FROM N, so the two cannot drift apart. Override
+# CORPUS only to point at a deliberately different document set.
+CORPUS="${CORPUS:-$HOME/bench_corpus_$N}"
 export ARM_CPUS="${ARM_CPUS:-12.0}" ARM_MEM="${ARM_MEM:-10g}"
 export LG_EXTRACTOR="${LG_EXTRACTOR:-tika}"
 LG=bench-langgraph; RR=bench-rocketride
@@ -30,9 +32,12 @@ say() { echo "[bench $(date -u +%H:%M:%S)] $*"; }
 
 # ------------------------------------------------------------------- gates
 [ "$(uname -m)" = x86_64 ] || { echo "FATAL: need x86_64 (timings are invalid under emulation)"; exit 1; }
-[ -d "$CORPUS" ] || { echo "FATAL: no corpus at $CORPUS — run: bash corpus/fetch_govdocs.sh $CORPUS $N"; exit 1; }
+# Fetch on demand: idempotent, and a corpus for this N either exists
+# complete and verified or is rebuilt. No silent partial corpora.
+bash corpus/fetch_govdocs.sh "$N" "$CORPUS"
 have=$(find "$CORPUS" -name '*.pdf' | wc -l | tr -d ' ')
-[ "$have" -ge "$N" ] || { echo "FATAL: $have PDFs < N=$N"; exit 1; }
+[ "$have" -eq "$N" ] || { echo "FATAL: corpus has $have PDFs, N=$N"; exit 1; }
+(cd "$CORPUS" && sha256sum -c --quiet SHA256SUMS) || { echo "FATAL: corpus checksum mismatch"; exit 1; }
 
 { echo "stamp_utc=$STAMP"; echo "arch=$(uname -m)"; echo "nproc=$(nproc)"
   echo "mem_gb=$(awk '/MemTotal/{printf "%.0f",$2/1048576}' /proc/meminfo)"
@@ -46,7 +51,8 @@ have=$(find "$CORPUS" -name '*.pdf' | wc -l | tr -d ' ')
   echo "lg_extractor=$LG_EXTRACTOR"
   echo "rr_threads=${RR_THREADS:-NONE (engine default)}"
 } > "$RUN/environment.txt"
-cp "$CORPUS/SHA256SUMS" "$RUN/corpus.sha256" 2>/dev/null || true
+cp "$CORPUS/SHA256SUMS" "$RUN/corpus.sha256"
+cp "$CORPUS/corpus_manifest.json" "$RUN/corpus_manifest.json"
 
 say "building both arms"
 docker compose build langgraph rocketride 2>&1 | tail -8

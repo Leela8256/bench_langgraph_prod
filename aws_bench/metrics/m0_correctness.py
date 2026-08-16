@@ -10,7 +10,7 @@ nothing is a defect.
 """
 
 from collections import Counter
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from metrics.records import ok_records
 
@@ -180,6 +180,97 @@ def ground_truth_match(rows: List[Dict], gt: Dict[str, Dict],
     return {"covered": covered, "mismatches": mism,
             "mismatch_docs": mismatch_docs[:15],
             "PASS": covered > 0 and mism == 0}
+
+
+def cross_arm(rows_a: List[Dict], rows_b: List[Dict],
+              arm_a: str = "lg", arm_b: str = "rr",
+              hard_ratio: Tuple[float, float] = (0.4, 2.5),
+              warn_ratio: Tuple[float, float] = (0.8, 1.25),
+              require_byte_parity: bool = False) -> Dict[str, Any]:
+    """Cross-arm equivalence: did the two frameworks do the SAME WORK?
+
+    Every other check in this module validates one arm against its own
+    contract. Two arms can each be internally perfect -- 384 dims, finite,
+    deterministic, correctly identified -- while processing different amounts
+    of text, and then a throughput comparison between them is meaningless.
+    Measured on this project: median chunk delta 0 but max +89 chunks and a
+    char ratio up to 1.977, i.e. one arm nearly doubled the other's work on at
+    least one document.
+
+    Two bands, from metrics/README:
+      hard  (default 0.4-2.5)  -- outside this a whole document was dropped or
+                                  duplicated; not explainable by parser
+                                  differences. FAILS the run.
+      warn  (default 0.8-1.25) -- real workload asymmetry. Reported, and it is
+                                  why chunks_per_s must be published beside
+                                  docs_per_s. Does NOT fail.
+
+    `require_byte_parity` is for matched-extractor runs (both arms on Tika),
+    where ordered chunk hashes are expected to be identical. Byte parity is
+    always MEASURED and reported; this only decides whether it GATES.
+
+    Only documents that succeeded on BOTH arms are compared -- a doc that
+    failed one side is already a census/structure failure there and must not
+    be double-counted as a parity failure here. Zero comparable documents is
+    vacuous, and vacuous is a FAIL, not a pass.
+    """
+    hard_lo, hard_hi = hard_ratio
+    warn_lo, warn_hi = warn_ratio
+    a = {r["doc"]: r for r in ok_records(rows_a)}
+    b = {r["doc"]: r for r in ok_records(rows_b)}
+    both = sorted(set(a) & set(b))
+
+    identical, differing, no_hashes = [], [], []
+    ratios: Dict[str, float] = {}
+    hard_bad, warn_bad = [], []
+    for d in both:
+        ha, hb = a[d].get("chunk_sha256"), b[d].get("chunk_sha256")
+        if ha is None or hb is None:
+            no_hashes.append(d)          # unproven, never counted as equal
+        elif ha == hb:
+            identical.append(d)
+        else:
+            differing.append(d)
+        na, nb = a[d].get("n_chunks"), b[d].get("n_chunks")
+        if isinstance(na, int) and isinstance(nb, int) and na > 0:
+            r = nb / na
+            ratios[d] = round(r, 4)
+            if not (hard_lo <= r <= hard_hi):
+                hard_bad.append(d)
+            elif not (warn_lo <= r <= warn_hi):
+                warn_bad.append(d)
+
+    vals = sorted(ratios.values())
+    stats = {
+        "median": vals[len(vals) // 2] if vals else None,
+        "min": vals[0] if vals else None,
+        "max": vals[-1] if vals else None,
+        "n": len(vals),
+    }
+    byte_parity = bool(both) and not differing and not no_hashes
+    passed = (
+        bool(both)
+        and not hard_bad
+        and not no_hashes
+        and (byte_parity if require_byte_parity else True)
+    )
+    return {
+        "compared": len(both),
+        "only_in_a": sorted(set(a) - set(b)),
+        "only_in_b": sorted(set(b) - set(a)),
+        "byte_identical": len(identical),
+        "byte_differing": len(differing),
+        "differing_docs": differing[:15],
+        "missing_hashes": no_hashes[:15],
+        "byte_parity": byte_parity,
+        "byte_parity_gated": require_byte_parity,
+        f"chunk_ratio_{arm_b}_over_{arm_a}": stats,
+        "hard_band": [hard_lo, hard_hi],
+        "hard_violations": hard_bad,
+        "warn_band": [warn_lo, warn_hi],
+        "warn_violations": warn_bad,
+        "PASS": passed,
+    }
 
 
 def parity_fixture(vec_a: Optional[List[float]], vec_b: Optional[List[float]],

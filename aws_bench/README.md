@@ -83,6 +83,37 @@ python3 bench/report.py ./run          # same numbers, on your laptop
   worker processes it, which pinned average parallelism near 6 cores while the
   parallel phase ran at ~61 chunks/s. Read the distribution, not just the mean.
 
+## The correctness gate
+
+A run is PASS only if every arm passes M0 **and** the two arms are proven to
+have done the same work. `bench/report.py` exits non-zero otherwise.
+
+Per arm, fail-closed — a missing field or unproven state is a violation, never
+a default pass:
+
+| check | catches |
+|---|---|
+| `census` | loss: offered == records, no duplicates, no unexpected failures, missing docs NAMED against the manifest |
+| `structure` | corruption: per-arm field contract exactly True (LG: identity + `X-Output-SHA256` body hash + finite vectors; RR: filepath identity), >=1 chunk, 384 dims, L2 norm within 1e-3 of 1.0, hash count == chunk count |
+| `determinism` | instability: ordered chunk hashes identical across reps; an outcome that flips also fails |
+
+Across arms — the check that makes the comparison mean anything:
+
+| check | rule |
+|---|---|
+| chunk ratio, **hard** 0.4-2.5 | outside it a whole document was dropped or duplicated. **FAILS.** |
+| chunk ratio, **warn** 0.8-1.25 | real workload asymmetry. Reported; this is why `chunks_per_s` is published beside `docs_per_s`. Does not fail. |
+| byte parity | ordered chunk hashes identical per doc. Always measured; **gated only when both arms parse with Tika**, since with different extractors identical hashes are not expected. |
+
+Why it is not ceremony: on a previous 49-doc run the median chunk delta was 0
+but the max was **+89 chunks and a 1.977x char ratio** — one arm nearly doubled
+the other's work on a document, while both were individually valid. A
+`parity_fixture` run separately showed embeddings agree to 1.3e-07 given
+identical text, so divergence enters at extraction/chunking, not embedding.
+
+Single-rep runs **cannot** pass: with no second observation determinism is
+unproven, and unproven fails closed.
+
 ## Known, and deliberate
 
 - The **tika sidecar is where LangGraph parses** in tika mode, so its CPU is

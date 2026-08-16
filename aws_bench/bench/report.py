@@ -20,7 +20,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]   # aws_bench/
 sys.path.insert(0, str(ROOT))
 
-from metrics.m0_correctness import census, determinism, gate_verdict, structure
+from metrics.m0_correctness import (census, cross_arm, determinism,
+                                    gate_verdict, structure)
 from metrics.m1_m2_perf import achieved_concurrency, latency, throughput, ttfr
 from metrics.m7_resources import container_resources, efficiency, window
 from metrics.provenance import check as prov_check
@@ -130,6 +131,26 @@ def main():
         }
         out["arms"][name] = arm_out
 
+    # ---- cross-arm: did the two frameworks do the SAME WORK? --------------
+    # Every check above validates ONE arm against its own contract. Two arms
+    # can each be perfect while processing different amounts of text, and then
+    # comparing their throughput is meaningless. Uses rep1 of each arm.
+    lg1, rr1 = run / "lg" / "rep1" / "per_doc.jsonl", run / "rr" / "rep1" / "per_doc.jsonl"
+    if lg1.exists() and rr1.exists():
+        a, _, _ = load_records(lg1)
+        b, _, _ = load_records(rr1)
+        # Byte parity is GATED only when both arms parse with Tika; with
+        # different extractors identical hashes are not expected, and the
+        # ratio bands carry the check instead.
+        matched = (env.get("lg_extractor") == "tika")
+        out["cross_arm"] = cross_arm(a, b, "lg", "rr", require_byte_parity=matched)
+        out["cross_arm"]["note"] = (
+            "byte parity gated (matched Tika extractors)" if matched else
+            "byte parity measured but NOT gated (extractors differ)")
+    else:
+        out["cross_arm"] = {"PASS": False,
+                            "error": "one arm missing — cannot prove equal work"}
+
     provf = run / "provenance.json"
     if provf.exists():
         out["provenance"] = prov_check(json.loads(provf.read_text()))
@@ -149,11 +170,25 @@ def main():
             v = s.get(k, {})
             print(f"  {k:<24} median={v.get('median')}  cv={v.get('cv')}  "
                   f"{v.get('verdict')}")
+    c = out.get("cross_arm", {})
+    print(f"\ncross-arm : {'PASS' if c.get('PASS') else 'FAIL'}  "
+          f"compared={c.get('compared')}  byte-identical={c.get('byte_identical')}"
+          f"/{c.get('compared')}  ratio(rr/lg)={c.get('chunk_ratio_rr_over_lg')}")
+    if c.get("hard_violations"):
+        print(f"            HARD band {c.get('hard_band')} violated by "
+              f"{len(c['hard_violations'])} docs: {c['hard_violations'][:8]}")
+    if c.get("warn_violations"):
+        print(f"            warn band {c.get('warn_band')}: "
+              f"{len(c['warn_violations'])} docs (reported, not failing)")
+    if c.get("note"):
+        print(f"            {c['note']}")
     if "provenance" in out:
         p = out["provenance"]
         print(f"\nprovenance: {'complete' if p['PASS'] else 'INCOMPLETE ' + str(p['missing_fields'])}")
     print("=" * 74)
-    ok = all(a["m0_PASS"] for a in out["arms"].values()) and out["arms"]
+    ok = (bool(out["arms"])
+          and all(a["m0_PASS"] for a in out["arms"].values())
+          and out["cross_arm"].get("PASS") is True)
     return 0 if ok else 1
 
 
