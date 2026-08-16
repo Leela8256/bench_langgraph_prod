@@ -170,6 +170,23 @@ after `ARM_CPUS`) so it can never steal from the arm it is measuring.
 - `/meta` reports `executor_workers: 4`, which is **inert**: the graph uses
   LangGraph's default executor, width `min(32, cpu_count+4)`, and `cpu_count()`
   sees host cores rather than the cgroup quota.
+- The RocketRide image carries a **behaviour patch**, not just a dependency
+  fix: `BUG_CHUNK_DUPLICATION`. In 3.3.1 the embedding-transformer node calls
+  `_flushDocuments()` (which delivers the batch) and then also falls through
+  to the default forwarding action, emitting the same document list twice.
+  Measured on 987 PDFs: **51 documents returned `[A,B,C,A,B,C]`
+  (repeat_factor 2) on RocketRide and 0 on LangGraph**, inflating its work by
+  ~40%. The patch adds `return self.preventDefault()` after the flush.
+  It is guarded (the build FAILS if the file, the source shape, or the result
+  is not what is expected), gated by `RR_DUP_PATCH` (set `0` to build stock
+  3.3.1 and quantify the difference), recorded in an image LABEL and in
+  provenance. **Describe the tested system as "RocketRide 3.3.1 with the
+  documented embedding-transformer duplication correction" — never as stock
+  3.3.1.**
+- `metrics.m0_correctness.self_duplication()` is a **permanent gate**: it
+  computes a repeat_factor per document from the ordered chunk hashes and
+  fails if any exceeds 1. It needs no comparison to the other arm, so it keeps
+  working after a RocketRide upgrade and would catch a regression immediately.
 - The RocketRide image **patches a broken dependency pin** so the engine can
   boot on Linux at all — see `findings/rr_linux_boot.md`. Recorded in
   provenance; remove when upstream fixes it.

@@ -43,6 +43,7 @@ export BENCH_TIMEOUT_S="${BENCH_TIMEOUT_S:-3600}"
 # have OOM-killed RocketRide (peak 10,536 MB) and capping per container gave
 # the two-container LG arm twice RocketRide's ceiling.
 export CORPUS
+export RR_DUP_PATCH="${RR_DUP_PATCH:-1}"
 export LG_EXTRACTOR="${LG_EXTRACTOR:-tika}"
 LG=bench-langgraph; RR=bench-rocketride
 REL="$(basename "$RUN")"          # results/ is mounted at /results in the client
@@ -74,12 +75,15 @@ have=$(find "$CORPUS" -name '*.pdf' | wc -l | tr -d ' ')
   echo "timeout_s=$BENCH_TIMEOUT_S"; echo "client=containerized (bench-client)"
   echo "lg_extractor=$LG_EXTRACTOR"
   echo "rr_threads=${RR_THREADS:-NONE (engine default)}"
+  echo "rr_dup_patch=$RR_DUP_PATCH"; echo "rr_engine_version=3.3.1"
+  echo "rr_sdk_version=1.3.0"
 } > "$RUN/environment.txt"
 cp "$CORPUS/SHA256SUMS" "$RUN/corpus.sha256"
 cp "$CORPUS/corpus_manifest.json" "$RUN/corpus_manifest.json"
 
 say "building both arms + bench client"
-docker compose build langgraph rocketride 2>&1 | tail -6
+docker compose build --build-arg RR_DUP_PATCH="$RR_DUP_PATCH" \
+  langgraph rocketride 2>&1 | tail -6
 docker compose --profile client build bench 2>&1 | tail -3
 for i in langgraph rocketride; do
   docker image inspect "bench-$i:latest" --format "$i {{.Id}} {{.Architecture}}" \

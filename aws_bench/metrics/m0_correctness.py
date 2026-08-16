@@ -308,6 +308,49 @@ def input_integrity(rows: List[Dict],
     }
 
 
+def self_duplication(rows: List[Dict]) -> Dict[str, Any]:
+    """Does an arm emit the same document list more than once?
+
+    A node that flushes its batch downstream and then also falls through to
+    the default forwarding action returns [A,B,C,A,B,C]. The chunk hashes are
+    valid, the vectors are valid, every per-document check passes -- and the
+    arm has silently done twice the work. Cross-arm parity would catch it only
+    if the other arm is present and correct; this catches it in ONE arm, which
+    is what makes it a usable permanent gate.
+
+    repeat_factor is the smallest k > 1 for which the ordered hash list equals
+    its first n/k elements repeated k times; 1 means no repetition. Measured on
+    RocketRide 3.3.1 before the BUG_CHUNK_DUPLICATION patch: 51 of 987
+    documents at factor 2, LangGraph 0 of 987.
+    """
+    def factor(h: List[str]) -> int:
+        n = len(h)
+        if n < 2:
+            return 1
+        for k in range(2, n + 1):
+            if n % k:
+                continue
+            p = n // k
+            if all(h[i] == h[i % p] for i in range(n)):
+                return k
+        return 1
+
+    dup: Dict[str, int] = {}
+    for r in ok_records(rows):
+        h = r.get("chunk_sha256")
+        if isinstance(h, list) and len(h) > 1:
+            k = factor(h)
+            if k > 1:
+                dup[r["doc"]] = k
+    return {
+        "checked": len(ok_records(rows)),
+        "duplicated_docs": len(dup),
+        "factors": sorted(set(dup.values())),
+        "examples": sorted(dup)[:15],
+        "PASS": not dup,
+    }
+
+
 def parity_fixture(vec_a: Optional[List[float]], vec_b: Optional[List[float]],
                    atol: float = 1e-5) -> Dict[str, Any]:
     if not (isinstance(vec_a, list) and isinstance(vec_b, list)

@@ -19,7 +19,8 @@ ROOT = Path(__file__).resolve().parents[1]   # aws_bench/
 sys.path.insert(0, str(ROOT))
 
 from metrics.m0_correctness import (census, cross_arm, determinism,
-                                    gate_verdict, input_integrity, structure)
+                                    gate_verdict, input_integrity,
+                                    self_duplication, structure)
 from metrics.m1_m2_perf import achieved_concurrency, latency, throughput, ttfr
 from metrics.m7_resources import (combined_peak_rss, container_resources,
                                   efficiency, window)
@@ -71,8 +72,12 @@ def rep_report(d: Path, arm: str, cpus, arm_cpus, mode: str,
                            expected_empty=EXPECTED_EMPTY)
     rep["structure"] = structure(rows, arm=arm, expected_empty=EXPECTED_EMPTY)
     rep["input_integrity"] = input_integrity(rows, manifest_sha)
+    # Permanent gate: an arm that emits its document list twice passes every
+    # per-document check while doing twice the work.
+    rep["self_duplication"] = self_duplication(rows)
     rep["m0_PASS_partial"] = gate_verdict(rep["census"], rep["structure"],
-                                          rep["input_integrity"])
+                                          rep["input_integrity"],
+                                          rep["self_duplication"])
 
     t = throughput(rows, warm_n=WARM_N)
     # In batch mode the driver's own measured makespan is authoritative,
@@ -265,9 +270,12 @@ def main():
           f"; warm-up excluded by the driver")
     for name, a in out["arms"].items():
         s = a["stability"]
+        dup = (a["reps"][0] or {}).get("self_duplication") or {}
         print(f"\n{name}:  M0 {'PASS' if a['m0_PASS'] else 'FAIL'}   "
               f"reps={a['rep_count']}/{a['rep_count_expected']}   "
-              f"determinism={a['determinism_PASS']}")
+              f"determinism={a['determinism_PASS']}   "
+              f"self_dup={dup.get('duplicated_docs')}/{dup.get('checked')} "
+              f"factors={dup.get('factors')}")
         for k in ("docs_per_s", "chunks_per_s", "p95_s", "effective_cores",
                   "cpu_utilization", "cpu_s_per_chunk"):
             v = s.get(k, {})

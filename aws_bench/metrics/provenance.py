@@ -19,6 +19,8 @@ REQUIRED = (
     "instance_type", "architecture", "cpu_count", "ram_gb",
     "corpus_manifest_sha256", "corpus_n_docs",
     "parser", "parser_config_hash", "chunk_config",
+    "rocketride_engine_version", "duplication_patch_applied",
+    "duplication_patch_id", "rocketride_sdk_version",
     "embedding_model",
     "offered_concurrency", "configured_concurrency",
     "warmup_policy", "timeout_s",

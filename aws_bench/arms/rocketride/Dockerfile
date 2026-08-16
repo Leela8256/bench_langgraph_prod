@@ -81,6 +81,46 @@ RUN find "$ENGINE_DIR" -name '*.txt' -exec \
     && ! grep -rq "onnxruntime-gpu==1\.20\.1" "$ENGINE_DIR" --include='*.txt'
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# BUG_CHUNK_DUPLICATION correction (RocketRide 3.3.1).
+#
+# nodes/embedding_transformer/IInstance.py calls _flushDocuments(), which
+# already delivers the batch downstream -- and then falls through to the
+# node's default forwarding action, emitting the SAME document list a second
+# time. Measured on 987 real PDFs: 51 documents came back as [A,B,C,A,B,C],
+# repeat_factor exactly 2, while LangGraph showed 0 of 987. That inflated
+# RocketRide's work by ~40% and its embedding cost with it.
+#
+# preventDefault() after the flush suppresses the duplicate emission.
+#
+# This MODIFIES THE PRODUCT UNDER TEST, so it is a build ARG: set
+# RR_DUP_PATCH=0 to build stock 3.3.1 and quantify the difference. Whichever
+# was built is recorded in the image label and in run provenance.
+ARG RR_DUP_PATCH=1
+RUN if [ "$RR_DUP_PATCH" = "1" ]; then \
+      F="$(find "$ENGINE_DIR" -path '*/nodes/embedding_transformer/IInstance.py' \
+            -type f | head -1)" \
+      && test -n "$F" \
+      && [ "$(grep -c 'preventDefault' "$F")" = "1" ] \
+      && awk '{ \
+           print; \
+           if (prev ~ /# Flush the documents$/ && \
+               $0 ~ /^        self\._flushDocuments\(\)$/) { \
+             print "        # BENCH PATCH BUG_CHUNK_DUPLICATION:"; \
+             print "        # Flush already delivered this batch downstream."; \
+             print "        return self.preventDefault()"; \
+           } \
+           prev=$0; \
+         }' "$F" > "$F.patched" \
+      && mv "$F.patched" "$F" \
+      && [ "$(grep -c 'preventDefault' "$F")" = "2" ] \
+      && echo "BUG_CHUNK_DUPLICATION patch applied to $F"; \
+    else echo "BUG_CHUNK_DUPLICATION patch SKIPPED (stock 3.3.1)"; fi
+
+LABEL benchmark.rocketride.engine_version="3.3.1" \
+      benchmark.rocketride.duplication_patch="preventDefault-after-embedding-flush"
+# ---------------------------------------------------------------------------
+
 # Client SDK pinned to the version the probe was verified against.
 RUN pip install --no-cache-dir "rocketride==1.3.0"
 

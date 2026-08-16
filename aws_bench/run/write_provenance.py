@@ -57,6 +57,15 @@ def main():
             "langgraph_extractor": wv.get("extractor"),
             "rocketride_engine_sha256": engine_sha,
         },
+        # The engine is PATCHED unless RR_DUP_PATCH=0. Describe the tested
+        # system as "RocketRide 3.3.1 with the documented embedding-transformer
+        # duplication correction" -- never as stock 3.3.1.
+        "rocketride_engine_version": env.get("rr_engine_version", "3.3.1"),
+        "rocketride_engine_sha256": engine_sha,
+        "rocketride_sdk_version": env.get("rr_sdk_version", "1.3.0"),
+        "duplication_patch_applied": env.get("rr_dup_patch", "1") == "1",
+        "duplication_patch_id": "BUG_CHUNK_DUPLICATION",
+        "engine_image_digest": digests.get("rocketride"),
         "instance_type": env.get("instance_type", "c7i.8xlarge"),
         "architecture": env.get("arch"),
         "os": env.get("os"),
