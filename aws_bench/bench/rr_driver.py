@@ -16,6 +16,7 @@ send_files -- the engine holds the backlog and schedules it); c<N>.
 """
 
 import asyncio
+import collections
 import hashlib
 import json
 import os
@@ -77,7 +78,7 @@ def verify(docs):
     return True, ""
 
 
-def records_from_batch(corpus, out, t0_ns, mono_offset_ns):
+def records_from_batch(corpus, out, t0_ns, mono_offset_ns, event_times=None):
     """Per-doc records from ONE batched send_files() response.
 
     Timing note, stated in every record: a batch has one submit instant and
@@ -92,6 +93,7 @@ def records_from_batch(corpus, out, t0_ns, mono_offset_ns):
     zip silently mis-credits work if the engine reorders. A file with no
     matching response is recorded as a failure, never dropped.
     """
+    event_times = event_times or {}
     items = out if isinstance(out, list) else [out]
     by_name = {}
     for it in items:
@@ -115,8 +117,16 @@ def records_from_batch(corpus, out, t0_ns, mono_offset_ns):
             recs.append(rec)
             continue
         ut = it.get("upload_time")
-        rec["completion_ns"] = t0_ns + int(float(ut) * 1e9) if isinstance(
-            ut, (int, float)) else t0_ns
+        ev = event_times.get(pdf.name)
+        if ev is not None:
+            # Client-observed: the clock was stamped when this file's terminal
+            # upload event arrived. Real latency, not reconstructed.
+            rec["completion_ns"] = ev
+            rec["timing_source"] = "client-observed upload event"
+        elif isinstance(ut, (int, float)):
+            rec["completion_ns"] = t0_ns + int(float(ut) * 1e9)
+        else:
+            rec["completion_ns"] = t0_ns
         rec["upload_time_s"] = ut
         rec["identity_ok"] = True          # matched by filepath basename
         docs = documents_from(it)
@@ -172,7 +182,35 @@ async def main():
     rr_threads = os.environ.get("RR_THREADS")
     threads = int(rr_threads) if rr_threads else None
 
-    client = RocketRideClient(uri=URI, auth=APIKEY)
+    # CLIENT-OBSERVED per-file completion times.
+    #
+    # A batched send_files() returns one result for the whole batch, so blast
+    # had no measured per-document timestamps and latency was withheld. The
+    # SDK does emit apaevt_status_upload events per file; stamping the clock
+    # when each file's terminal event arrives gives a real client-observed
+    # completion, not a value derived from the engine's own upload_time.
+    #
+    # The handler must not perturb what it measures: it filters on the first
+    # dict lookup, does O(1) work, and swallows everything -- instrumentation
+    # that can throw into the SDK's event loop would change the run.
+    event_times: dict = {}
+    event_actions: collections.Counter = collections.Counter()
+
+    async def on_event(ev):
+        try:
+            if ev.get("event") != "apaevt_status_upload":
+                return
+            b = ev.get("body") or {}
+            act = b.get("action")
+            event_actions[act] += 1
+            if act in ("complete", "error"):
+                fp = b.get("filepath")
+                if fp:
+                    event_times.setdefault(Path(fp).name, time.perf_counter_ns())
+        except Exception:
+            pass
+
+    client = RocketRideClient(uri=URI, auth=APIKEY, on_event=on_event)
     await client.connect()
     use_kwargs = dict(filepath=str(pipe_path), use_existing=True, ttl=7200)
     if threads:
@@ -182,6 +220,12 @@ async def main():
     print(f"[rr] pipeline up, token={token}, "
           f"threads_requested={threads if threads else 'NONE (engine default)'}",
           flush=True)
+
+    try:
+        await client.set_events(token, ["apaevt_status_upload"])
+    except Exception as exc:
+        print(f"[rr] set_events unavailable ({type(exc).__name__}); per-doc "
+              f"latency will fall back to derived", flush=True)
 
     mode = sys.argv[4] if len(sys.argv) > 4 else "seq"
     warm_docs = int(sys.argv[5]) if len(sys.argv) > 5 else 0
@@ -205,6 +249,7 @@ async def main():
                                for p in warm_set], token),
             timeout=TIMEOUT_S)
         warm_s = (time.perf_counter_ns() - tw) / 1e9
+        event_times.clear(); event_actions.clear()   # warm-up is not measured
         print(f"[rr] warm-start: {len(warm_set)} docs in {warm_s:.1f}s "
               f"(excluded from measurement)", flush=True)
     else:
@@ -331,7 +376,26 @@ async def main():
         batch_result = await asyncio.wait_for(client.send_files(payload, token),
                                               timeout=BATCH_TIMEOUT_S)
         span = (time.perf_counter_ns() - t0) / 1e9
-        records = records_from_batch(corpus, batch_result, t0, mono_offset_ns)
+        # If every terminal event landed long before the batch returned, the
+        # events signal UPLOAD completion, not processing completion. Using
+        # them as latency would understate it badly, so they are discarded and
+        # the run falls back to derived timings (which the report withholds).
+        span_ns = time.perf_counter_ns() - t0
+        usable = dict(event_times)
+        if usable:
+            last = max(usable.values()) - t0
+            frac = last / span_ns if span_ns else 0
+            if frac < 0.5:
+                print(f"[rr] upload events completed at {frac:.0%} of the batch "
+                      f"span -> they signal UPLOAD, not processing; DISCARDING "
+                      f"and falling back to derived timings", flush=True)
+                usable = {}
+            else:
+                print(f"[rr] client-observed completions for {len(usable)}/"
+                      f"{len(corpus)} files (last at {frac:.0%} of span)",
+                      flush=True)
+        records = records_from_batch(corpus, batch_result, t0, mono_offset_ns,
+                                     usable)
         returned = len(batch_result) if isinstance(batch_result, list) else 1
         matched = sum(1 for r in records if r.get("reason") != "no_response_for_file")
         print(f"[rr] batch returned {returned} items for {len(corpus)} files; "
@@ -353,6 +417,8 @@ async def main():
             "threads_requested": threads,
             "warm_docs": warm_docs,
             "warm_disjoint_from_measured": warm_disjoint,
+            "event_actions_seen": dict(event_actions),
+            "client_observed_completions": len(usable) if mode == "blast" else None,
             "warm_s": round(warm_s, 3) if warm_s is not None else None,
             "configured_concurrency_note":
                 "threads_requested is what was ASKED FOR; the engine pool actually "

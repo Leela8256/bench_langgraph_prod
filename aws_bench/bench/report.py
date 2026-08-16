@@ -56,9 +56,14 @@ def rep_report(d: Path, arm: str, cpus, arm_cpus, mode: str,
     manifest = json.loads((d / "manifest.json").read_text())
     meta = meta or {}
     closed_loop = mode.startswith("c") and mode[1:].isdigit()
-    # Batch responses carry no measured per-doc timestamps; the driver marks
-    # records it derived from the engine's own upload_time.
-    derived = bool(rows) and "derived" in str(rows[0].get("timing_source", ""))
+    # A batch response carries no per-document timestamps, so the driver marks
+    # what clock each record used. Latency is publishable only when the times
+    # were CLIENT-OBSERVED; values reconstructed from the engine's own
+    # upload_time are withheld. Judged over all records, not just the first,
+    # since a failed record may carry no marker at all.
+    sources = {str(r.get("timing_source", "")) for r in rows}
+    client_observed = any("client-observed" in x for x in sources)
+    derived = any("derived" in x for x in sources) and not client_observed
 
     rep = {"rep_dir": d.name, "mode": mode, "meta": meta}
     rep["census"] = census(rows, offered=manifest["n"],
@@ -70,9 +75,9 @@ def rep_report(d: Path, arm: str, cpus, arm_cpus, mode: str,
                                           rep["input_integrity"])
 
     t = throughput(rows, warm_n=WARM_N)
-    # For a derived-timing batch, prefer the driver's MEASURED span over a
-    # span reconstructed from per-file upload_time.
-    if derived and meta.get("span_s"):
+    # In batch mode the driver's own measured makespan is authoritative,
+    # whichever clock the per-document records used.
+    if (derived or (not closed_loop and client_observed)) and meta.get("span_s"):
         span = float(meta["span_s"])
         ok_n = t.get("successful_in_window")
         chunks = t.get("successful_chunks")
@@ -84,6 +89,7 @@ def rep_report(d: Path, arm: str, cpus, arm_cpus, mode: str,
         })
     rep["m1_throughput"] = t
     rep["ttfr_s"] = ttfr(rows)
+    rep["timing_source"] = sorted(x for x in sources if x)
 
     if derived:
         # Withheld rather than published: percentiles over SDK-derived
