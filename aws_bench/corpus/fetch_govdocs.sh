@@ -13,19 +13,31 @@
 # Extraction uses python3's zipfile, not unzip -- the box has neither unzip nor
 # sudo to install it (preflight flags this), and python3 is required anyway.
 #
-#   bash corpus/fetch_govdocs.sh [n] [dest_dir]
-#   bash corpus/fetch_govdocs.sh 200
+# OFFSET skips the first OFFSET PDFs, so a later run can use a document set
+# DISJOINT from an earlier one -- results carried over from a corpus the code
+# has already been tuned against are not independent evidence.
+#
+# EXTRA documents beyond N are fetched for warm-up, so warm-up documents are
+# never also measured documents (a measured doc that was warmed is cache-hot
+# and no longer comparable to its peers).
+#
+#   bash corpus/fetch_govdocs.sh [n] [dest_dir] [offset] [extra]
+#   bash corpus/fetch_govdocs.sh 200 "" 200 5     # docs 201-400, +5 warm
 set -euo pipefail
 N="${1:-200}"
-DEST="${2:-$HOME/bench_corpus_$N}"
+OFFSET="${3:-0}"
+EXTRA="${4:-0}"
+TOTAL=$(( N + EXTRA ))
+DEST="${2:-$HOME/bench_corpus_n${N}_off${OFFSET}}"
+[ -n "${2:-}" ] || true
 BASE="https://digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles"
 MAX_ARCHIVES="${MAX_ARCHIVES:-10}"
 
 # Idempotent: an existing, complete, verified corpus is left alone.
 if [ -f "$DEST/corpus_manifest.json" ] && [ -f "$DEST/SHA256SUMS" ]; then
   have=$(find "$DEST" -name '*.pdf' | wc -l | tr -d ' ')
-  if [ "$have" -eq "$N" ] && (cd "$DEST" && sha256sum -c --quiet SHA256SUMS 2>/dev/null); then
-    echo "corpus already present and verified: $DEST ($N docs)"
+  if [ "$have" -eq "$TOTAL" ] && (cd "$DEST" && sha256sum -c --quiet SHA256SUMS 2>/dev/null); then
+    echo "corpus already present and verified: $DEST ($N measured + $EXTRA warm)"
     exit 0
   fi
   echo "existing corpus at $DEST is incomplete or failed verification — rebuilding"
@@ -43,7 +55,7 @@ for i in $(seq 0 $((MAX_ARCHIVES - 1))); do
     curl -fsSL --max-time 1800 "$BASE/${idx}.zip" -o "$CACHE"
   fi
   CACHES+=("$CACHE")
-  have=$(python3 - "${CACHES[@]}" <<'PY'
+  have=$(python3 - "${CACHES[@]}" <<'PYX'
 import sys, zipfile, pathlib
 seen = set()
 for c in sys.argv[1:]:
@@ -51,25 +63,30 @@ for c in sys.argv[1:]:
         seen.update(pathlib.PurePosixPath(i.filename).name for i in z.infolist()
                     if i.filename.lower().endswith(".pdf") and not i.is_dir())
 print(len(seen))
-PY
+PYX
 )
-  echo "  archives: ${#CACHES[@]}  PDFs available: $have  (need $N)"
-  [ "$have" -ge "$N" ] && break
+  echo "  archives: ${#CACHES[@]}  PDFs available: $have  (need $(( OFFSET + TOTAL )))"
+  [ "$have" -ge "$(( OFFSET + TOTAL ))" ] && break
 done
 
-python3 - "$DEST" "$N" "${CACHES[@]}" <<'PY'
+python3 - "$DEST" "$TOTAL" "$OFFSET" "$N" "${CACHES[@]}" <<'PY'
 import json, pathlib, sys, zipfile
-dest, n, caches = pathlib.Path(sys.argv[1]), int(sys.argv[2]), sys.argv[3:]
+dest, total, offset, measured = (pathlib.Path(sys.argv[1]), int(sys.argv[2]),
+                                 int(sys.argv[3]), int(sys.argv[4]))
+caches = sys.argv[5:]
 found = {}
 for c in caches:
     with zipfile.ZipFile(c) as z:
         for i in z.infolist():
             if i.filename.lower().endswith(".pdf") and not i.is_dir():
                 found.setdefault(pathlib.PurePosixPath(i.filename).name, (c, i))
-if len(found) < n:
+need = offset + total
+if len(found) < need:
     sys.exit(f"FATAL: only {len(found)} PDFs across {len(caches)} archives, "
-             f"need {n}. Raise MAX_ARCHIVES.")
-picked = sorted(found)[:n]
+             f"need {need} (offset {offset} + {total}). Raise MAX_ARCHIVES.")
+# Sorted by basename, then sliced -- so a given (offset, total) always yields
+# the same documents no matter how many archives it took.
+picked = sorted(found)[offset:offset + total]
 for name in picked:
     c, info = found[name]
     with zipfile.ZipFile(c) as z:
@@ -78,11 +95,15 @@ for name in picked:
     "corpus": "govdocs1",
     "source": "digitalcorpora.s3.amazonaws.com/corpora/files/govdocs1/zipfiles",
     "selection_rule": "first N PDFs sorted by basename across archives consumed",
-    "n": n,
+    "n_measured": measured,
+    "n_warm_extra": total - measured,
+    "offset": offset,
     "archives": [pathlib.Path(c).name for c in caches],
-    "docs": picked,
+    "docs_measured": picked[:measured],
+    "docs_warm": picked[measured:],
 }, indent=1))
-print(f"extracted {n} PDFs from {len(caches)} archive(s)")
+print(f"extracted {total} PDFs (offset {offset}: {measured} measured "
+      f"+ {total-measured} warm) from {len(caches)} archive(s)")
 PY
 
 cd "$DEST"

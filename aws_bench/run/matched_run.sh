@@ -23,7 +23,10 @@ RUN="$HERE/results/${STAMP}_${MODE:-blast}"
 N="${N:-200}"; REPS="${REPS:-3}"; WARM="${WARM:-25}"; MODE="${MODE:-blast}"
 # Corpus dir is derived FROM N, so the two cannot drift apart. Override
 # CORPUS only to point at a deliberately different document set.
-CORPUS="${CORPUS:-$HOME/bench_corpus_$N}"
+# CORPUS_OFFSET selects a DISJOINT document set. The dir name encodes N and
+# the offset, so a run can never pick up a corpus built for other parameters.
+CORPUS_OFFSET="${CORPUS_OFFSET:-0}"
+CORPUS="${CORPUS:-$HOME/bench_corpus_n${N}_off${CORPUS_OFFSET}}"
 # Core split. The arm under test gets ARM_CPUS cores; the bench CLIENT gets
 # the remainder, on its OWN cores, so it can never steal from the arm it is
 # measuring. Every container in an arm shares the arm's set -- LangGraph's arm
@@ -50,9 +53,10 @@ say() { echo "[bench $(date -u +%H:%M:%S)] $*"; }
 [ "$(uname -m)" = x86_64 ] || { echo "FATAL: need x86_64 (timings are invalid under emulation)"; exit 1; }
 # Fetch on demand: idempotent, and a corpus for this N either exists
 # complete and verified or is rebuilt. No silent partial corpora.
-bash corpus/fetch_govdocs.sh "$N" "$CORPUS"
+bash corpus/fetch_govdocs.sh "$N" "$CORPUS" "$CORPUS_OFFSET" "$WARM"
 have=$(find "$CORPUS" -name '*.pdf' | wc -l | tr -d ' ')
-[ "$have" -eq "$N" ] || { echo "FATAL: corpus has $have PDFs, N=$N"; exit 1; }
+# N measured + WARM disjoint warm-up documents.
+[ "$have" -eq "$(( N + WARM ))" ] || { echo "FATAL: corpus has $have PDFs, expected $(( N + WARM ))"; exit 1; }
 (cd "$CORPUS" && sha256sum -c --quiet SHA256SUMS) || { echo "FATAL: corpus checksum mismatch"; exit 1; }
 
 { echo "stamp_utc=$STAMP"; echo "arch=$(uname -m)"; echo "nproc=$(nproc)"
@@ -63,6 +67,7 @@ have=$(find "$CORPUS" -name '*.pdf' | wc -l | tr -d ' ')
   echo "git_sha=$(git rev-parse HEAD)"
   echo "git_dirty=$(git status --porcelain | wc -l | tr -d ' ')"
   echo "corpus=$CORPUS"; echo "n_docs=$N"; echo "reps=$REPS"; echo "mode=$MODE"
+  echo "corpus_offset=$CORPUS_OFFSET"
   echo "warm_docs=$WARM"; echo "arm_cpus=$ARM_CPUS"
   echo "arm_mem=UNCAPPED (measured, not enforced)"
   echo "bench_cpuset=$BENCH_CPUSET"; echo "client_cpuset=$CLIENT_CPUSET"

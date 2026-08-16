@@ -148,7 +148,8 @@ async def main():
     from rocketride import RocketRideClient
 
     corpus_dir, out, n = Path(sys.argv[1]), Path(sys.argv[2]), int(sys.argv[3])
-    corpus = sorted(corpus_dir.glob("*.pdf"))[:n]
+    all_pdfs = sorted(corpus_dir.glob("*.pdf"))
+    corpus = all_pdfs[:n]
     if not corpus:
         raise SystemExit(f"no PDFs in {corpus_dir}")
     out.mkdir(parents=True, exist_ok=True)
@@ -189,9 +190,15 @@ async def main():
     # span, timed separately and excluded. One tiny fixture is not enough --
     # a cold engine pays model load, JIT and cache fill, and with an unknown
     # pool size a single document leaves most workers cold at t=0.
+    # Warm-up documents are DISJOINT from measured ones (see lg_driver).
+    warm_set = all_pdfs[n:n + warm_docs]
+    warm_disjoint = len(warm_set) == warm_docs
+    if warm_docs > 0 and not warm_disjoint:
+        warm_set = corpus[:warm_docs]
+        print(f"[rr] WARNING: only {len(all_pdfs)} PDFs for n={n}+warm="
+              f"{warm_docs}; warm-up REUSES measured docs", flush=True)
     warm_s = None
     if warm_docs > 0:
-        warm_set = corpus[:warm_docs]
         tw = time.perf_counter_ns()
         await asyncio.wait_for(
             client.send_files([(str(p), {"doc_id": f"warm-{p.stem}"})
@@ -345,6 +352,7 @@ async def main():
             "client_pool_cap": None if POOL_MAX >= 10 ** 9 else POOL_MAX,
             "threads_requested": threads,
             "warm_docs": warm_docs,
+            "warm_disjoint_from_measured": warm_disjoint,
             "warm_s": round(warm_s, 3) if warm_s is not None else None,
             "configured_concurrency_note":
                 "threads_requested is what was ASKED FOR; the engine pool actually "

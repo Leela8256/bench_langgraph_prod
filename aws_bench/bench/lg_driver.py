@@ -139,7 +139,18 @@ def main():
     # an asymmetry the audit artifact actively misreported.
     warm_docs = int(sys.argv[5]) if len(sys.argv) > 5 else 0
 
-    corpus = sorted(corpus_dir.glob("*.pdf"))[:n]
+    # Warm-up documents are DISJOINT from measured ones: a measured doc that
+    # was already warmed is cache-hot and no longer comparable to its peers.
+    # The corpus dir holds N measured + EXTRA warm; if EXTRA was not fetched,
+    # fall back to the head of the corpus and say so.
+    all_pdfs = sorted(corpus_dir.glob("*.pdf"))
+    corpus = all_pdfs[:n]
+    warm_set = all_pdfs[n:n + warm_docs]
+    warm_disjoint = len(warm_set) == warm_docs
+    if warm_docs > 0 and not warm_disjoint:
+        warm_set = corpus[:warm_docs]
+        print(f"  WARNING: only {len(all_pdfs)} PDFs for n={n}+warm={warm_docs};"
+              f" warm-up REUSES measured docs (not disjoint)", flush=True)
     if not corpus:
         raise SystemExit(f"no PDFs in {corpus_dir}")
     out.mkdir(parents=True, exist_ok=True)
@@ -165,7 +176,7 @@ def main():
     if warm_docs > 0:
         tw = time.perf_counter_ns()
         with ThreadPoolExecutor(max_workers=min(warm_docs, 8)) as pool:
-            list(pool.map(one, corpus[:warm_docs]))
+            list(pool.map(one, warm_set))
         warm_s = (time.perf_counter_ns() - tw) / 1e9
         print(f"  warm-start: {warm_docs} docs in {warm_s:.1f}s (excluded)",
               flush=True)
@@ -204,6 +215,7 @@ def main():
             "n_docs": len(corpus), "span_s": round(span, 2),
             "timeout_s": TIMEOUT_S,
             "warm_docs": warm_docs,
+            "warm_disjoint_from_measured": warm_disjoint,
             "warm_s": round(warm_s, 3) if warm_s is not None else None,
             "offered_concurrency": offered,
             # What the service was TOLD vs what it actually runs: /meta reports
