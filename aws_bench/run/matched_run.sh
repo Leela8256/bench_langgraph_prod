@@ -25,6 +25,14 @@ N="${N:-200}"; REPS="${REPS:-3}"; WARM="${WARM:-25}"; MODE="${MODE:-blast}"
 # CORPUS only to point at a deliberately different document set.
 CORPUS="${CORPUS:-$HOME/bench_corpus_$N}"
 export ARM_CPUS="${ARM_CPUS:-12.0}" ARM_MEM="${ARM_MEM:-10g}"
+# The arm's cores, pinned as a SET shared by every container in that arm.
+# LangGraph's arm is langgraph+tika together; RocketRide's is one container.
+# Without this the LG arm silently gets ARM_CPUS twice. Empty = uncapped.
+if [ -z "${BENCH_CPUSET:-}" ]; then
+  _n=${ARM_CPUS%%.*}
+  BENCH_CPUSET="0-$(( _n - 1 ))"
+fi
+export BENCH_CPUSET
 export LG_EXTRACTOR="${LG_EXTRACTOR:-tika}"
 LG=bench-langgraph; RR=bench-rocketride
 mkdir -p "$RUN"
@@ -48,6 +56,7 @@ have=$(find "$CORPUS" -name '*.pdf' | wc -l | tr -d ' ')
   echo "git_dirty=$(git status --porcelain | wc -l | tr -d ' ')"
   echo "corpus=$CORPUS"; echo "n_docs=$N"; echo "reps=$REPS"; echo "mode=$MODE"
   echo "warm_docs=$WARM"; echo "arm_cpus=$ARM_CPUS"; echo "arm_mem=$ARM_MEM"
+  echo "bench_cpuset=$BENCH_CPUSET"
   echo "lg_extractor=$LG_EXTRACTOR"
   echo "rr_threads=${RR_THREADS:-NONE (engine default)}"
 } > "$RUN/environment.txt"

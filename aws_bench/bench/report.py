@@ -86,9 +86,34 @@ def rep_report(d: Path, arm: str, cpus: int) -> dict:
                 t.get("successful_chunks"), t.get("window_span_s"), cpus)
     tika = d / "sampler_tika.jsonl"
     if tika.exists():
-        rep["m7_resources_tika_sidecar"] = container_resources(tika)
-        rep["m7_note"] = ("LG parses in the tika sidecar; its CPU is NOT in "
-                          "the langgraph cgroup and the sidecar is uncapped")
+        # LangGraph's PARSE stage runs in the tika sidecar, in a different
+        # cgroup. RocketRide is charged for its own embedded Tika, so leaving
+        # this out would compare a parsing framework against a non-parsing
+        # one. Both are reported; the ARM TOTAL is what feeds efficiency.
+        tk = window(tika, t.get("window_t0_ns"), t.get("window_t1_ns"),
+                    meta.get("mono_offset_ns")) or container_resources(tika)
+        rep["m7_resources_tika_sidecar"] = tk
+        svc = rep.get("m7_resources") or {}
+        if tk and svc:
+            total_cpu = round((svc.get("cpu_seconds") or 0)
+                              + (tk.get("cpu_seconds") or 0), 2)
+            span = svc.get("span_s") or t.get("window_span_s")
+            rep["m7_arm_total"] = {
+                "cpu_seconds": total_cpu,
+                "effective_cores": round(total_cpu / span, 3) if span else None,
+                "components": {"service": svc.get("cpu_seconds"),
+                               "tika_sidecar": tk.get("cpu_seconds")},
+                "peak_rss_mb": round((svc.get("rss_mb") or {}).get("peak", 0)
+                                     + (tk.get("rss_mb") or {}).get("peak", 0), 1),
+            }
+            # Efficiency is recomputed on the ARM TOTAL, replacing the
+            # service-only figure — that is the like-for-like number.
+            rep["m7_efficiency_service_only"] = rep.get("m7_efficiency")
+            rep["m7_efficiency"] = efficiency(
+                t.get("successful_in_window"), total_cpu,
+                t.get("successful_chunks"), t.get("window_span_s"), cpus)
+            rep["m7_note"] = ("efficiency uses ARM TOTAL (langgraph + tika); "
+                              "service-only kept as m7_efficiency_service_only")
     return rep
 
 

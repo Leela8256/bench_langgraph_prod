@@ -116,9 +116,17 @@ unproven, and unproven fails closed.
 
 ## Known, and deliberate
 
-- The **tika sidecar is where LangGraph parses** in tika mode, so its CPU is
-  not in the langgraph cgroup. It is sampled separately and reported
-  alongside — never merged.
+- **An "arm" is the service plus whatever it offloads to.** In tika mode
+  LangGraph parses in the sidecar, so its parse CPU is in a different cgroup
+  and it would otherwise get a second full CPU allocation. Both are handled:
+  every container in an arm shares one `BENCH_CPUSET` (so LangGraph+tika get
+  the same cores RocketRide gets alone), and the report charges tika's CPU to
+  LangGraph as `m7_arm_total`, which is what feeds `cpu_s_per_chunk`.
+  Service-only stays available as `m7_efficiency_service_only`.
+  RocketRide's Tika is embedded in its engine, so it was always charged for
+  parsing — anything else compares a parsing framework to a non-parsing one.
+- **Tika time IS in LangGraph's latency and throughput** and always was: the
+  extract node makes a blocking HTTP call inside the request the driver times.
 - `/meta` reports `executor_workers: 4`, which is **inert**: the graph uses
   LangGraph's default executor, width `min(32, cpu_count+4)`, and `cpu_count()`
   sees host cores rather than the cgroup quota.

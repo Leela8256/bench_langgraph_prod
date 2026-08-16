@@ -11,7 +11,14 @@
 # on a 32-vCPU box with 12 CPU each leaves them contending, and neither
 # number means anything.
 
+# BENCH_CPUSET is the real equaliser and applies to ALL THREE services.
+# An ARM is (service + whatever it offloads to), so LangGraph's langgraph+tika
+# pair must share the SAME physical cores that RocketRide gets alone --
+# otherwise the LG arm has 12 CPU for the service PLUS 12 for tika against
+# RocketRide's 12, and it wins by being handed twice the machine.
+# matched_run.sh derives it from ARM_CPUS; empty = full host (uncapped runs).
 x-envelope: &envelope
+  cpuset: "${BENCH_CPUSET:-}"
   deploy:
     resources:
       limits:
@@ -88,10 +95,13 @@ services:
     # Pinned to the Tika the RocketRide engine bundles (3.2.3), loaded with
     # RocketRide's own config so both arms parse identically.
     #
-    # NOTE: in EXTRACTOR=tika mode the LangGraph arm's PARSE work happens HERE,
-    # not in its own container. Its CPU is therefore NOT in the langgraph
-    # cgroup. The report samples this container separately and reports it
-    # alongside — never silently merged.
+    # In EXTRACTOR=tika mode the LangGraph arm's PARSE work happens HERE, not
+    # in its own container, so its CPU is NOT in the langgraph cgroup. Two
+    # consequences, both handled rather than ignored:
+    #   1. it shares the arm's cpuset, so the LG arm does not get extra cores
+    #   2. the report ADDS this container's CPU to LangGraph's cost, because
+    #      RocketRide is charged for its own (embedded) Tika and anything else
+    #      would compare a parsing framework against a non-parsing one
     image: apache/tika:3.2.3.0-full
     container_name: bench-tika
     command: ["-c", "/tika-config/tika-config.xml"]
