@@ -35,7 +35,7 @@ EXPECTED_EMPTY = {"000164.pdf"}
 ARMS = {"lg": "langgraph", "rr": "rocketride"}
 
 
-def rep_report(d: Path, arm: str, cpus: int) -> dict:
+def rep_report(d: Path, arm: str, cpus: int, arm_cpus=None) -> dict:
     f = d / "per_doc.jsonl"
     if not f.exists():
         return {"error": f"missing {f}"}
@@ -83,7 +83,8 @@ def rep_report(d: Path, arm: str, cpus: int) -> dict:
         if res:
             rep["m7_efficiency"] = efficiency(
                 t.get("successful_in_window"), res.get("cpu_seconds"),
-                t.get("successful_chunks"), t.get("window_span_s"), cpus)
+                t.get("successful_chunks"), t.get("window_span_s"), cpus,
+                arm_cpus)
     tika = d / "sampler_tika.jsonl"
     if tika.exists():
         # LangGraph's PARSE stage runs in the tika sidecar, in a different
@@ -111,7 +112,8 @@ def rep_report(d: Path, arm: str, cpus: int) -> dict:
             rep["m7_efficiency_service_only"] = rep.get("m7_efficiency")
             rep["m7_efficiency"] = efficiency(
                 t.get("successful_in_window"), total_cpu,
-                t.get("successful_chunks"), t.get("window_span_s"), cpus)
+                t.get("successful_chunks"), t.get("window_span_s"), cpus,
+                arm_cpus)
             rep["m7_note"] = ("efficiency uses ARM TOTAL (langgraph + tika); "
                               "service-only kept as m7_efficiency_service_only")
     return rep
@@ -124,13 +126,14 @@ def main():
     if envf.exists():
         env = dict(l.split("=", 1) for l in envf.read_text().splitlines() if "=" in l)
     cpus = int(env.get("nproc") or 0) or None
+    arm_cpus = float(env.get("arm_cpus") or 0) or None   # cores this arm was given
 
     out = {"run_dir": str(run), "mode": "blast", "environment": env, "arms": {}}
     for arm, name in ARMS.items():
         reps = sorted((run / arm).glob("rep*")) if (run / arm).exists() else []
         if not reps:
             continue
-        rr = [rep_report(d, arm, cpus) for d in reps]
+        rr = [rep_report(d, arm, cpus, arm_cpus) for d in reps]
         good = [r for r in rr if not r.get("error")]
         det = None
         if len(good) >= 2:

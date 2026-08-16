@@ -103,7 +103,8 @@ def window(sampler_path, t0_ns: Optional[int], t1_ns: Optional[int],
 def efficiency(successful_docs: Optional[int], cpu_seconds: Optional[float],
                successful_chunks: Optional[int] = None,
                wall_seconds: Optional[float] = None,
-               available_cpus: Optional[int] = None) -> Dict[str, Any]:
+               available_cpus: Optional[int] = None,
+               arm_cpus: Optional[float] = None) -> Dict[str, Any]:
     """Work-normalised cost. Per-chunk pairs with chunks_per_s: it is the
     honest denominator when two frameworks split the same PDFs differently.
 
@@ -124,13 +125,35 @@ def efficiency(successful_docs: Optional[int], cpu_seconds: Optional[float],
         out["cpu_seconds_per_chunk"] = round(cpu_seconds / successful_chunks, 4)
     else:
         out["cpu_seconds_per_chunk"] = None
-    if wall_seconds and available_cpus:
-        util = cpu_seconds / (wall_seconds * available_cpus)
-        out["cpu_utilization"] = round(util, 4)
-        out["available_cpus"] = available_cpus
-        out["cpu_utilization_valid"] = util <= 1.0
-        if util > 1.0:
-            out["cpu_utilization_error"] = (
-                "utilization > 1.0 — CPU attributed outside the measured "
-                "window or outside this container; the run is INVALID")
+    # TWO denominators, because they answer different questions and the same
+    # run reads very differently under each. An arm capped at 12 on a 32-core
+    # box can never exceed 0.375 against the host, which makes the host figure
+    # useless as a saturation signal -- so the ARM figure is the headline.
+    #
+    #   cpu_utilization      = of what this arm was ALLOWED  -> saturation
+    #   cpu_utilization_host = of the whole machine          -> capacity used
+    #
+    # Measured example: LangGraph at 4.013 effective cores is 33.4% of its
+    # 12-CPU allocation but only 12.5% of the host. Reporting only the latter
+    # would read as "idle" when the arm was a third saturated.
+    if wall_seconds:
+        denom = arm_cpus or available_cpus
+        if denom:
+            util = cpu_seconds / (wall_seconds * denom)
+            out["cpu_utilization"] = round(util, 4)
+            out["cpu_utilization_basis"] = (
+                f"arm allocation ({denom} cpus)" if arm_cpus
+                else f"host ({denom} cpus) — NO arm cap recorded")
+            out["arm_cpus"] = arm_cpus
+            # Bounded at 1.0 by physics. Above it, cost was attributed outside
+            # the window or outside this arm -- flagged, never clamped.
+            out["cpu_utilization_valid"] = util <= 1.0
+            if util > 1.0:
+                out["cpu_utilization_error"] = (
+                    "utilization > 1.0 — CPU attributed outside the measured "
+                    "window or outside this arm; the run is INVALID")
+        if available_cpus:
+            out["cpu_utilization_host"] = round(
+                cpu_seconds / (wall_seconds * available_cpus), 4)
+            out["host_cpus"] = available_cpus
     return out

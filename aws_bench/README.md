@@ -78,6 +78,11 @@ python3 bench/report.py ./run          # same numbers, on your laptop
 - **Latency labels are not interchangeable.** Closed-loop gives service
   latency; blast gives batch-position latency, which includes queue wait.
 - **`INSUFFICIENT_REPS` or `UNSTABLE` means do not quote a point value.**
+- **`cpu_utilization` is against the ARM'S ALLOCATION, not the host.** An arm
+  capped at 12 on a 32-core box can never exceed 0.375 of the host, so the
+  host figure reads as "idle" when the arm is a third saturated — the same
+  LangGraph run is 33.4% of its allocation and 12.5% of the machine.
+  `cpu_utilization_host` is reported beside it for capacity questions.
 - **Utilisation is span-averaged**, so one slow document drags it down. On our
   govdocs corpus the largest document holds 41% of all chunks and a single
   worker processes it, which pinned average parallelism near 6 cores while the
