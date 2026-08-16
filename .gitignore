@@ -14,3 +14,6 @@ gate50/out*/
 # AWS run: environment-specific config and on-box run artifacts
 aws_run/local.env
 aws_run/evidence/smoke_*/
+# aws_bench: run output and local env — never committed
+aws_bench/results/
+aws_bench/local/local.env

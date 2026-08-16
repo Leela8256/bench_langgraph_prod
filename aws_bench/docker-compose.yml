@@ -1,0 +1,101 @@
+# Both benchmark arms, equal envelope.
+#
+# The resource limits ARE the benchmark: comparing two frameworks is
+# meaningless unless both get identical CPU and memory. Change them only in
+# pairs, and record the change with any results.
+#
+#   docker compose up -d langgraph      # LangGraph arm (+ tika if EXTRACTOR=tika)
+#   docker compose up -d rocketride     # RocketRide arm
+#
+# Arms are started ONE AT A TIME by run/matched_run.sh. Running both at once
+# on a 32-vCPU box with 12 CPU each leaves them contending, and neither
+# number means anything.
+
+x-envelope: &envelope
+  deploy:
+    resources:
+      limits:
+        cpus: "${ARM_CPUS:-12.0}"
+        memory: ${ARM_MEM:-10g}
+      reservations:
+        memory: 1g
+
+services:
+  langgraph:
+    build:
+      context: ./arms/langgraph
+      dockerfile: Dockerfile
+    image: bench-langgraph:latest
+    platform: linux/amd64
+    container_name: bench-langgraph
+    <<: *envelope
+    environment:
+      PIPELINES: document-pdf-v1
+      EXECUTOR_WORKERS: "4"        # reported on /meta but INERT — nodes.py uses
+                                   # LangGraph's default executor, width
+                                   # min(32, cpu_count+4). Never quote /meta here.
+      MAX_INFLIGHT_REQUESTS: "8"
+      REQUEST_TIMEOUT_SECONDS: "300"
+      TORCH_THREADS: "1"
+      TORCH_INTEROP_THREADS: "1"
+      MAX_UPLOAD_BYTES: "104857600"
+      HF_HUB_OFFLINE: "1"
+      # Intra-op threading pinned on BOTH arms. Document-level concurrency is
+      # the variable under test; BLAS threading is a confound.
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      TOKENIZERS_PARALLELISM: "false"
+      EXTRACTOR: "${LG_EXTRACTOR:-tika}"
+      TIKA_URL: "http://tika:9998"
+    ports: ["8100:8100"]
+    healthcheck:
+      # warm-up gated: unhealthy until the graph has processed its own fixture
+      test: ["CMD", "python", "-c",
+             "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8100/health/ready',timeout=3).status==200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  rocketride:
+    build:
+      context: ./arms/rocketride
+      dockerfile: Dockerfile
+    image: bench-rocketride:latest
+    platform: linux/amd64
+    container_name: bench-rocketride
+    <<: *envelope
+    environment:
+      ROCKETRIDE_URI: ws://127.0.0.1:5565/task/service
+      ROCKETRIDE_APIKEY: local-dev
+      RR_HOST: "0.0.0.0"           # MUST be explicit: without it the engine
+                                   # binds an interface unreachable from the host
+      OMP_NUM_THREADS: "1"         # matched to the langgraph arm
+      MKL_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      TOKENIZERS_PARALLELISM: "false"
+    ports: ["5565:5565"]
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import socket,sys; s=socket.socket(); s.settimeout(3); sys.exit(s.connect_ex(('127.0.0.1',5565)))"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  tika:
+    # Pinned to the Tika the RocketRide engine bundles (3.2.3), loaded with
+    # RocketRide's own config so both arms parse identically.
+    #
+    # NOTE: in EXTRACTOR=tika mode the LangGraph arm's PARSE work happens HERE,
+    # not in its own container. Its CPU is therefore NOT in the langgraph
+    # cgroup. The report samples this container separately and reports it
+    # alongside — never silently merged.
+    image: apache/tika:3.2.3.0-full
+    container_name: bench-tika
+    command: ["-c", "/tika-config/tika-config.xml"]
+    volumes:
+      - ./arms/langgraph/tika-config:/tika-config:ro
+    <<: *envelope
+    ports: ["9998:9998"]
