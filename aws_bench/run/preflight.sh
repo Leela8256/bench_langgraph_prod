@@ -38,9 +38,11 @@ else
 fi
 command -v git >/dev/null 2>&1 && ok "git: $(git --version | awk '{print $3}')" || bad "git missing"
 command -v python3 >/dev/null 2>&1 && ok "python3: $(python3 -V 2>&1 | awk '{print $2}')" || bad "python3 missing"
-command -v aws >/dev/null 2>&1 && ok "aws cli: $(aws --version 2>&1 | awk '{print $1}')" || bad "aws cli missing (needed for S3 exfil)"
+command -v aws >/dev/null 2>&1 && ok "aws cli: $(aws --version 2>&1 | awk '{print $1}')" \
+  || info "aws cli absent — install with run/install_awscli.sh (expected on this AMI)"
 command -v curl >/dev/null 2>&1 && ok "curl present" || bad "curl missing (corpus download)"
-command -v unzip >/dev/null 2>&1 && ok "unzip present" || bad "unzip missing (govdocs zip; no sudo to install — use python3 zipfile)"
+command -v unzip >/dev/null 2>&1 && ok "unzip present" \
+  || info "unzip absent — corpus fetcher uses python3 zipfile by design"
 
 # cgroup version — the samplers read container CPU/RSS from cgroups
 if [ -f /sys/fs/cgroup/cgroup.controllers ]; then info "cgroup: v2"; else info "cgroup: v1"; fi

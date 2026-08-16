@@ -1,16 +1,14 @@
-"""Blast-mode report — per-rep metrics + across-rep stability + provenance.
+"""Run report — per-rep metrics, across-rep stability, cross-arm parity.
 
-Implements the adopted changes: chunks/s beside docs/s, CPU-s/chunk,
-effective cores, CPU utilization, offered vs configured vs ACHIEVED
-concurrency, threads as observation only, n>=3 reps with CV, and a resource
-window sliced to exactly the throughput window.
+Mode-aware. `blast` and `c<N>` are different experiments and are labelled as
+such: closed-loop yields SERVICE latency, blast yields BATCH-POSITION latency
+(queue wait included). They answer different questions and are never compared.
 
-Blast latency is labelled BATCH-POSITION LATENCY throughout: it includes queue
-wait, because the whole backlog is submitted at t=0. It must never be compared
-with closed-loop service latency -- they answer different questions.
+Nothing is computed here that metrics/ can compute. This file decides WHAT to
+ask and WHETHER the run passes; the formulas live in the library.
 
   python3 bench/report.py <run_dir>
-Expects <run_dir>/<arm>/rep<N>/per_doc.jsonl. Run from the repo root.
+Expects <run_dir>/<arm>/rep<N>/per_doc.jsonl.
 """
 
 import json
@@ -21,76 +19,117 @@ ROOT = Path(__file__).resolve().parents[1]   # aws_bench/
 sys.path.insert(0, str(ROOT))
 
 from metrics.m0_correctness import (census, cross_arm, determinism,
-                                    gate_verdict, structure)
+                                    gate_verdict, input_integrity, structure)
 from metrics.m1_m2_perf import achieved_concurrency, latency, throughput, ttfr
-from metrics.m7_resources import container_resources, efficiency, window
+from metrics.m7_resources import (combined_peak_rss, container_resources,
+                                  efficiency, window)
 from metrics.provenance import check as prov_check
 from metrics.records import load_records, ok_records
 from metrics.stability import across_reps
 
-WARM_N = 0        # blast submits everything at t=0; a warm-window slice of a
-                  # single batch is not meaningful. Warm-up is excluded by the
-                  # driver's uncounted warm-up doc instead.
+# Warm-up is excluded by the DRIVER (real docs, timed separately), so no
+# further window slicing is applied here in either mode.
+WARM_N = 0
 EXPECTED_EMPTY = {"000164.pdf"}
 ARMS = {"lg": "langgraph", "rr": "rocketride"}
 
 
-def rep_report(d: Path, arm: str, cpus: int, arm_cpus=None) -> dict:
+def load_manifest_sha(run: Path) -> dict:
+    """corpus.sha256 is `<sha>  <name>` per line — the canonical inputs."""
+    f = run / "corpus.sha256"
+    if not f.exists():
+        return {}
+    out = {}
+    for line in f.read_text().splitlines():
+        parts = line.split()
+        if len(parts) >= 2:
+            out[Path(parts[-1]).name] = parts[0]
+    return out
+
+
+def rep_report(d: Path, arm: str, cpus, arm_cpus, mode: str,
+               manifest_sha: dict) -> dict:
     f = d / "per_doc.jsonl"
     if not f.exists():
         return {"error": f"missing {f}"}
     rows, meta, _ = load_records(f)
     manifest = json.loads((d / "manifest.json").read_text())
     meta = meta or {}
+    closed_loop = mode.startswith("c") and mode[1:].isdigit()
+    # Batch responses carry no measured per-doc timestamps; the driver marks
+    # records it derived from the engine's own upload_time.
+    derived = bool(rows) and "derived" in str(rows[0].get("timing_source", ""))
 
-    rep = {"rep_dir": d.name, "meta": meta}
+    rep = {"rep_dir": d.name, "mode": mode, "meta": meta}
     rep["census"] = census(rows, offered=manifest["n"],
                            expected_docs=set(manifest["docs"]),
                            expected_empty=EXPECTED_EMPTY)
     rep["structure"] = structure(rows, arm=arm, expected_empty=EXPECTED_EMPTY)
-    rep["m0_PASS_partial"] = gate_verdict(rep["census"], rep["structure"])
+    rep["input_integrity"] = input_integrity(rows, manifest_sha)
+    rep["m0_PASS_partial"] = gate_verdict(rep["census"], rep["structure"],
+                                          rep["input_integrity"])
 
     t = throughput(rows, warm_n=WARM_N)
+    # For a derived-timing batch, prefer the driver's MEASURED span over a
+    # span reconstructed from per-file upload_time.
+    if derived and meta.get("span_s"):
+        span = float(meta["span_s"])
+        ok_n = t.get("successful_in_window")
+        chunks = t.get("successful_chunks")
+        t.update({
+            "window_span_s": round(span, 3),
+            "docs_per_s": round(ok_n / span, 4) if span else None,
+            "chunks_per_s": round(chunks / span, 4) if span else None,
+            "span_source": "MEASURED batch makespan (shot_meta.span_s)",
+        })
     rep["m1_throughput"] = t
-    lat = latency(rows, warm_n=WARM_N, mode="open-loop-blast")
-    lat["label"] = "BATCH-POSITION LATENCY — includes queue wait"
-    rep["m2_latency"] = lat
     rep["ttfr_s"] = ttfr(rows)
 
-    ac = achieved_concurrency(rows, warm_n=WARM_N)
-    rep["concurrency"] = {
-        "offered": meta.get("offered_concurrency"),
-        "configured_note": meta.get("configured_concurrency_note"),
-        "achieved_peak": ac.get("peak_achieved"),
-        "achieved_mean_time_weighted": ac.get("mean_achieved_time_weighted"),
-        "note": "offered != configured != achieved; never treat as equal",
-    }
+    if derived:
+        # Withheld rather than published: percentiles over SDK-derived
+        # durations are not client-observed latency, and an interval sweep
+        # over them reconstructs the offered batch shape rather than proving
+        # server-side execution concurrency.
+        why = ("UNAVAILABLE — batch mode returns no per-document timestamps; "
+               "derived values would not be client-observed")
+        rep["m2_latency"] = {"unavailable": why}
+        rep["concurrency"] = {"offered": meta.get("offered_concurrency"),
+                              "achieved_peak": None,
+                              "achieved_unavailable": why}
+    else:
+        lat = latency(rows, warm_n=WARM_N,
+                      mode="closed-loop" if closed_loop else "open-loop-blast")
+        lat["label"] = ("SERVICE LATENCY" if closed_loop
+                        else "BATCH-POSITION LATENCY — includes queue wait")
+        rep["m2_latency"] = lat
+        ac = achieved_concurrency(rows, warm_n=WARM_N)
+        rep["concurrency"] = {
+            "offered": meta.get("offered_concurrency"),
+            "configured_note": meta.get("configured_concurrency_note"),
+            "achieved_peak": ac.get("peak_achieved"),
+            "achieved_mean_time_weighted": ac.get("mean_achieved_time_weighted"),
+            "note": "offered != configured != achieved; never treat as equal",
+        }
 
     sampler = d / "sampler.jsonl"
     if sampler.exists():
-        # Sliced to the SAME window as throughput. Falls back to whole-stream
-        # only if the driver did not record the clock offset, and says so.
         w = window(sampler, t.get("window_t0_ns"), t.get("window_t1_ns"),
                    meta.get("mono_offset_ns"))
-        if w:
-            rep["m7_resources"] = w
-            rep["m7_window"] = "sliced to throughput window"
-        else:
-            rep["m7_resources"] = container_resources(sampler)
-            rep["m7_window"] = ("WHOLE STREAM — not window-matched; "
-                                "cost-per-work may include setup")
+        rep["m7_resources"] = w or container_resources(sampler)
+        rep["m7_window"] = ("sliced to throughput window" if w else
+                            "WHOLE STREAM — not window-matched")
         res = rep.get("m7_resources") or {}
         if res:
             rep["m7_efficiency"] = efficiency(
                 t.get("successful_in_window"), res.get("cpu_seconds"),
                 t.get("successful_chunks"), t.get("window_span_s"), cpus,
                 arm_cpus)
+
     tika = d / "sampler_tika.jsonl"
     if tika.exists():
-        # LangGraph's PARSE stage runs in the tika sidecar, in a different
-        # cgroup. RocketRide is charged for its own embedded Tika, so leaving
-        # this out would compare a parsing framework against a non-parsing
-        # one. Both are reported; the ARM TOTAL is what feeds efficiency.
+        # LangGraph PARSES in the sidecar, a different cgroup. RocketRide is
+        # charged for its own embedded Tika, so omitting this compares a
+        # parsing framework against a non-parsing one.
         tk = window(tika, t.get("window_t0_ns"), t.get("window_t1_ns"),
                     meta.get("mono_offset_ns")) or container_resources(tika)
         rep["m7_resources_tika_sidecar"] = tk
@@ -99,24 +138,66 @@ def rep_report(d: Path, arm: str, cpus: int, arm_cpus=None) -> dict:
             total_cpu = round((svc.get("cpu_seconds") or 0)
                               + (tk.get("cpu_seconds") or 0), 2)
             span = svc.get("span_s") or t.get("window_span_s")
+            combined = combined_peak_rss(
+                sampler, tika, t.get("window_t0_ns"), t.get("window_t1_ns"),
+                meta.get("mono_offset_ns"))
             rep["m7_arm_total"] = {
                 "cpu_seconds": total_cpu,
                 "effective_cores": round(total_cpu / span, 3) if span else None,
                 "components": {"service": svc.get("cpu_seconds"),
                                "tika_sidecar": tk.get("cpu_seconds")},
-                "peak_rss_mb": round((svc.get("rss_mb") or {}).get("peak", 0)
-                                     + (tk.get("rss_mb") or {}).get("peak", 0), 1),
+                "peak_rss_mb_contemporaneous": combined,
             }
-            # Efficiency is recomputed on the ARM TOTAL, replacing the
-            # service-only figure — that is the like-for-like number.
             rep["m7_efficiency_service_only"] = rep.get("m7_efficiency")
             rep["m7_efficiency"] = efficiency(
                 t.get("successful_in_window"), total_cpu,
                 t.get("successful_chunks"), t.get("window_span_s"), cpus,
                 arm_cpus)
-            rep["m7_note"] = ("efficiency uses ARM TOTAL (langgraph + tika); "
-                              "service-only kept as m7_efficiency_service_only")
+            rep["m7_note"] = ("ARM TOTAL (langgraph + tika) feeds efficiency; "
+                              "peak RSS is the max SIMULTANEOUS sum, not "
+                              "peak(svc) + peak(tika)")
     return rep
+
+
+def arm_report(run: Path, arm: str, cpus, arm_cpus, mode: str,
+               manifest_sha: dict, want_reps: int) -> dict:
+    reps = sorted((run / arm).glob("rep*"))
+    rr = [rep_report(d, arm, cpus, arm_cpus, mode, manifest_sha) for d in reps]
+    good = [r for r in rr if not r.get("error")]
+
+    # EVERY rep against rep1, not just rep2 — rep3 was previously free to
+    # differ without failing anything.
+    dets, det_pass = {}, None
+    if len(reps) >= 2:
+        base, _, _ = load_records(reps[0] / "per_doc.jsonl")
+        for other in reps[1:]:
+            rows_b, _, _ = load_records(other / "per_doc.jsonl")
+            dets[f"rep1_vs_{other.name}"] = determinism(base, rows_b)
+        det_pass = all(d.get("PASS") is True for d in dets.values())
+
+    rep_count_ok = (want_reps is None) or (len(reps) == want_reps)
+    return {
+        "reps": rr,
+        "rep_count": len(reps),
+        "rep_count_expected": want_reps,
+        "rep_count_ok": rep_count_ok,
+        "determinism": dets or None,
+        "determinism_PASS": det_pass,
+        # Fail-closed: fewer than 2 reps means determinism is UNPROVEN.
+        "m0_PASS": bool(good) and rep_count_ok
+                   and all(r.get("m0_PASS_partial") for r in good)
+                   and det_pass is True,
+        "stability": across_reps(good, {
+            "docs_per_s": ("m1_throughput", "docs_per_s"),
+            "chunks_per_s": ("m1_throughput", "chunks_per_s"),
+            "p50_s": ("m2_latency", "p50"),
+            "p95_s": ("m2_latency", "p95"),
+            "effective_cores": ("m7_resources", "effective_cores"),
+            "cpu_utilization": ("m7_efficiency", "cpu_utilization"),
+            "cpu_s_per_chunk": ("m7_efficiency", "cpu_seconds_per_chunk"),
+            "peak_rss_mb": ("m7_resources", "rss_mb", "peak"),
+        }),
+    }
 
 
 def main():
@@ -124,99 +205,87 @@ def main():
     env = {}
     envf = run / "environment.txt"
     if envf.exists():
-        env = dict(l.split("=", 1) for l in envf.read_text().splitlines() if "=" in l)
+        env = dict(l.split("=", 1) for l in envf.read_text().splitlines()
+                   if "=" in l)
     cpus = int(env.get("nproc") or 0) or None
-    arm_cpus = float(env.get("arm_cpus") or 0) or None   # cores this arm was given
+    arm_cpus = float(env.get("arm_cpus") or 0) or None
+    mode = env.get("mode") or "blast"
+    want_reps = int(env.get("reps") or 0) or None
+    manifest_sha = load_manifest_sha(run)
 
-    out = {"run_dir": str(run), "mode": "blast", "environment": env, "arms": {}}
+    out = {"run_dir": str(run), "mode": mode, "environment": env, "arms": {}}
     for arm, name in ARMS.items():
-        reps = sorted((run / arm).glob("rep*")) if (run / arm).exists() else []
-        if not reps:
+        if not (run / arm).exists():
             continue
-        rr = [rep_report(d, arm, cpus, arm_cpus) for d in reps]
-        good = [r for r in rr if not r.get("error")]
-        det = None
-        if len(good) >= 2:
-            a, _, _ = load_records(reps[0] / "per_doc.jsonl")
-            b, _, _ = load_records(reps[1] / "per_doc.jsonl")
-            det = determinism(a, b)
-        arm_out = {
-            "reps": rr,
-            "determinism_rep1_vs_rep2": det,
-            "m0_PASS": (all(r.get("m0_PASS_partial") for r in good)
-                        and gate_verdict(det) if det else False),
-            "stability": across_reps(good, {
-                "docs_per_s": ("m1_throughput", "docs_per_s"),
-                "chunks_per_s": ("m1_throughput", "chunks_per_s"),
-                "p50_batch_position_s": ("m2_latency", "p50"),
-                "p95_batch_position_s": ("m2_latency", "p95"),
-                "effective_cores": ("m7_resources", "effective_cores"),
-                "cpu_utilization": ("m7_efficiency", "cpu_utilization"),
-                "cpu_s_per_chunk": ("m7_efficiency", "cpu_seconds_per_chunk"),
-                "peak_rss_mb": ("m7_resources", "rss_mb", "peak"),
-                "achieved_peak": ("concurrency", "achieved_peak"),
-            }),
-        }
-        out["arms"][name] = arm_out
+        out["arms"][name] = arm_report(run, arm, cpus, arm_cpus, mode,
+                                       manifest_sha, want_reps)
 
-    # ---- cross-arm: did the two frameworks do the SAME WORK? --------------
-    # Every check above validates ONE arm against its own contract. Two arms
-    # can each be perfect while processing different amounts of text, and then
-    # comparing their throughput is meaningless. Uses rep1 of each arm.
-    lg1, rr1 = run / "lg" / "rep1" / "per_doc.jsonl", run / "rr" / "rep1" / "per_doc.jsonl"
-    if lg1.exists() and rr1.exists():
-        a, _, _ = load_records(lg1)
-        b, _, _ = load_records(rr1)
-        # Byte parity is GATED only when both arms parse with Tika; with
-        # different extractors identical hashes are not expected, and the
-        # ratio bands carry the check instead.
-        matched = (env.get("lg_extractor") == "tika")
-        out["cross_arm"] = cross_arm(a, b, "lg", "rr", require_byte_parity=matched)
-        out["cross_arm"]["note"] = (
-            "byte parity gated (matched Tika extractors)" if matched else
-            "byte parity measured but NOT gated (extractors differ)")
-    else:
-        out["cross_arm"] = {"PASS": False,
-                            "error": "one arm missing — cannot prove equal work"}
+    # ---- cross-arm, EVERY rep ------------------------------------------
+    matched = (env.get("lg_extractor") == "tika")
+    per_rep, n = {}, 0
+    while True:
+        n += 1
+        lg = run / "lg" / f"rep{n}" / "per_doc.jsonl"
+        rr = run / "rr" / f"rep{n}" / "per_doc.jsonl"
+        if not (lg.exists() and rr.exists()):
+            break
+        a, _, _ = load_records(lg)
+        b, _, _ = load_records(rr)
+        per_rep[f"rep{n}"] = cross_arm(a, b, "lg", "rr",
+                                       require_byte_parity=matched)
+    out["cross_arm"] = {
+        "per_rep": per_rep,
+        "byte_parity_gated": matched,
+        "note": ("byte parity gated (matched Tika extractors)" if matched else
+                 "byte parity measured but NOT gated (extractors differ)"),
+        "PASS": bool(per_rep) and all(v.get("PASS") is True
+                                      for v in per_rep.values()),
+    }
+    if not per_rep:
+        out["cross_arm"]["error"] = "no rep present on both arms"
 
     provf = run / "provenance.json"
-    if provf.exists():
-        out["provenance"] = prov_check(json.loads(provf.read_text()))
+    out["provenance"] = (prov_check(json.loads(provf.read_text()))
+                         if provf.exists()
+                         else {"PASS": False, "error": "provenance.json missing"})
 
-    (run / "BLAST_REPORT.json").write_text(json.dumps(out, indent=1, default=str))
+    (run / "RUN_REPORT.json").write_text(json.dumps(out, indent=1, default=str))
     print(json.dumps(out, indent=1, default=str))
 
+    closed = mode.startswith("c") and mode[1:].isdigit()
     print("\n" + "=" * 74)
-    print(f"BLAST — {len(ARMS)} arms, warm-up excluded by driver, "
-          f"latency = BATCH-POSITION (includes queue wait)")
+    print(f"MODE {mode.upper()} — latency is "
+          f"{'SERVICE (closed-loop)' if closed else 'BATCH-POSITION (blast)'}"
+          f"; warm-up excluded by the driver")
     for name, a in out["arms"].items():
         s = a["stability"]
-        print(f"\n{name}:  M0 {'PASS' if a['m0_PASS'] else 'FAIL'}")
-        for k in ("docs_per_s", "chunks_per_s", "p95_batch_position_s",
-                  "effective_cores", "cpu_utilization", "cpu_s_per_chunk",
-                  "achieved_peak"):
+        print(f"\n{name}:  M0 {'PASS' if a['m0_PASS'] else 'FAIL'}   "
+              f"reps={a['rep_count']}/{a['rep_count_expected']}   "
+              f"determinism={a['determinism_PASS']}")
+        for k in ("docs_per_s", "chunks_per_s", "p95_s", "effective_cores",
+                  "cpu_utilization", "cpu_s_per_chunk"):
             v = s.get(k, {})
-            print(f"  {k:<24} median={v.get('median')}  cv={v.get('cv')}  "
-                  f"{v.get('verdict')}")
-    c = out.get("cross_arm", {})
-    print(f"\ncross-arm : {'PASS' if c.get('PASS') else 'FAIL'}  "
-          f"compared={c.get('compared')}  byte-identical={c.get('byte_identical')}"
-          f"/{c.get('compared')}  ratio(rr/lg)={c.get('chunk_ratio_rr_over_lg')}")
-    if c.get("hard_violations"):
-        print(f"            HARD band {c.get('hard_band')} violated by "
-              f"{len(c['hard_violations'])} docs: {c['hard_violations'][:8]}")
-    if c.get("warn_violations"):
-        print(f"            warn band {c.get('warn_band')}: "
-              f"{len(c['warn_violations'])} docs (reported, not failing)")
-    if c.get("note"):
-        print(f"            {c['note']}")
-    if "provenance" in out:
-        p = out["provenance"]
-        print(f"\nprovenance: {'complete' if p['PASS'] else 'INCOMPLETE ' + str(p['missing_fields'])}")
+            if v.get("n"):
+                print(f"  {k:<20} median={v.get('median')}  cv={v.get('cv')}  "
+                      f"{v.get('verdict')}")
+        u = (a["reps"][0] or {}).get("m2_latency", {}).get("unavailable")
+        if u:
+            print(f"  latency/concurrency  {u}")
+    c = out["cross_arm"]
+    print(f"\ncross-arm : {'PASS' if c['PASS'] else 'FAIL'}  ({len(c['per_rep'])} reps compared)")
+    for rep, v in c["per_rep"].items():
+        print(f"  {rep}: byte-identical {v['byte_identical']}/{v['compared']}  "
+              f"ratio={v.get('chunk_ratio_rr_over_lg', {}).get('median')}  "
+              f"hard_viol={len(v.get('hard_violations') or [])}")
+    p = out["provenance"]
+    print(f"\nprovenance: {'complete' if p['PASS'] else 'INCOMPLETE — ' + str(p.get('missing_fields') or p.get('error'))}")
     print("=" * 74)
+
     ok = (bool(out["arms"])
           and all(a["m0_PASS"] for a in out["arms"].values())
-          and out["cross_arm"].get("PASS") is True)
+          and c["PASS"] is True
+          and p["PASS"] is True)      # incomplete provenance is not publishable
+    print("RUN PASS" if ok else "RUN FAIL — numbers kept, never quoted")
     return 0 if ok else 1
 
 

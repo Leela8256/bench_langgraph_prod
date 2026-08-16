@@ -1,9 +1,8 @@
-"""RocketRide smoke driver — runs INSIDE the bench-rocketride container.
+"""RocketRide driver — runs in the bench CLIENT container.
 
-Why inside: historically host->container WebSocket was believed broken. That
-turned out to be a missing --host=0.0.0.0 on our side, not an engine defect --
-with the flag set, host reachability probes pass. The driver still runs
-container-side because it removes a network variable from the measurement.
+Runs in the bench CLIENT container, never inside the engine's container: the
+client's own CPU and RSS must not land in the server's cgroup, and both arms
+must receive their bytes over an equivalent network hop.
 
 Writes per_doc.jsonl in the schema metrics/ consumes, satisfying the RR record
 contract from metrics.m0_correctness.REQUIRED_TRUE["rr"] (identity_ok). Vector
@@ -25,14 +24,18 @@ import time
 import uuid
 from pathlib import Path
 
-URI = "ws://127.0.0.1:5565/task/service"
-APIKEY = "local-dev"
-PIPE_SRC = Path("/work/benchmark_pdf.pipe")
-WARMUP_DOC = Path("/work/data/probe/sample.pdf")
-TIMEOUT_S = 300
-# A batch of N documents legitimately takes far longer than one document, so
-# the per-doc timeout would abort a healthy run.
-BATCH_TIMEOUT_S = int(os.environ.get("RR_BATCH_TIMEOUT_S", "3600"))
+# Reached over the network from the bench client container, NOT from inside
+# the engine's own container -- see bench.Dockerfile for why that matters.
+URI = os.environ.get("ROCKETRIDE_URI", "ws://rocketride:5565/task/service")
+APIKEY = os.environ.get("ROCKETRIDE_APIKEY", "local-dev")
+PIPE_SRC = Path(os.environ.get("BENCH_PIPE", "/pipe/benchmark_pdf.pipe"))
+WARMUP_DOC = Path(os.environ.get("BENCH_WARMUP_DOC", "/pipe/sample.pdf"))
+TIMEOUT_S = int(os.environ.get("BENCH_TIMEOUT_S", "3600"))
+# ONE deadline for both arms and both modes. Previously LangGraph had 300s
+# per request while a RocketRide batch had 3600s, so a healthy LangGraph doc
+# late in a 200-doc backlog could be killed by queue wait while the equivalent
+# RocketRide batch ran on for an hour. Not a matched condition.
+BATCH_TIMEOUT_S = int(os.environ.get("BENCH_TIMEOUT_S", "3600"))
 EMBED_DIM = 384
 # Client sockets, not offered concurrency. Default 0 = no client-side cap
 # (one socket per in-flight doc), so the engine's scheduler is the only

@@ -24,17 +24,25 @@ N="${N:-200}"; REPS="${REPS:-3}"; WARM="${WARM:-25}"; MODE="${MODE:-blast}"
 # Corpus dir is derived FROM N, so the two cannot drift apart. Override
 # CORPUS only to point at a deliberately different document set.
 CORPUS="${CORPUS:-$HOME/bench_corpus_$N}"
-export ARM_CPUS="${ARM_CPUS:-12.0}" ARM_MEM="${ARM_MEM:-10g}"
-# The arm's cores, pinned as a SET shared by every container in that arm.
-# LangGraph's arm is langgraph+tika together; RocketRide's is one container.
-# Without this the LG arm silently gets ARM_CPUS twice. Empty = uncapped.
-if [ -z "${BENCH_CPUSET:-}" ]; then
-  _n=${ARM_CPUS%%.*}
-  BENCH_CPUSET="0-$(( _n - 1 ))"
-fi
-export BENCH_CPUSET
+# Core split. The arm under test gets ARM_CPUS cores; the bench CLIENT gets
+# the remainder, on its OWN cores, so it can never steal from the arm it is
+# measuring. Every container in an arm shares the arm's set -- LangGraph's arm
+# is langgraph+tika together, RocketRide's is one container -- otherwise the
+# LG arm silently gets a second full allocation.
+HOSTCPUS="$(nproc)"
+ARM_CPUS="${ARM_CPUS:-$(( HOSTCPUS * 3 / 4 ))}"
+_n=${ARM_CPUS%%.*}
+: "${BENCH_CPUSET:=0-$(( _n - 1 ))}"
+: "${CLIENT_CPUSET:=${_n}-$(( HOSTCPUS - 1 ))}"
+export ARM_CPUS BENCH_CPUSET CLIENT_CPUSET
+export BENCH_TIMEOUT_S="${BENCH_TIMEOUT_S:-3600}"
+# Memory is measured, not capped -- see docker-compose.yml. A 10g cap would
+# have OOM-killed RocketRide (peak 10,536 MB) and capping per container gave
+# the two-container LG arm twice RocketRide's ceiling.
+export CORPUS
 export LG_EXTRACTOR="${LG_EXTRACTOR:-tika}"
 LG=bench-langgraph; RR=bench-rocketride
+REL="$(basename "$RUN")"          # results/ is mounted at /results in the client
 mkdir -p "$RUN"
 say() { echo "[bench $(date -u +%H:%M:%S)] $*"; }
 
@@ -55,16 +63,19 @@ have=$(find "$CORPUS" -name '*.pdf' | wc -l | tr -d ' ')
   echo "git_sha=$(git rev-parse HEAD)"
   echo "git_dirty=$(git status --porcelain | wc -l | tr -d ' ')"
   echo "corpus=$CORPUS"; echo "n_docs=$N"; echo "reps=$REPS"; echo "mode=$MODE"
-  echo "warm_docs=$WARM"; echo "arm_cpus=$ARM_CPUS"; echo "arm_mem=$ARM_MEM"
-  echo "bench_cpuset=$BENCH_CPUSET"
+  echo "warm_docs=$WARM"; echo "arm_cpus=$ARM_CPUS"
+  echo "arm_mem=UNCAPPED (measured, not enforced)"
+  echo "bench_cpuset=$BENCH_CPUSET"; echo "client_cpuset=$CLIENT_CPUSET"
+  echo "timeout_s=$BENCH_TIMEOUT_S"; echo "client=containerized (bench-client)"
   echo "lg_extractor=$LG_EXTRACTOR"
   echo "rr_threads=${RR_THREADS:-NONE (engine default)}"
 } > "$RUN/environment.txt"
 cp "$CORPUS/SHA256SUMS" "$RUN/corpus.sha256"
 cp "$CORPUS/corpus_manifest.json" "$RUN/corpus_manifest.json"
 
-say "building both arms"
-docker compose build langgraph rocketride 2>&1 | tail -8
+say "building both arms + bench client"
+docker compose build langgraph rocketride 2>&1 | tail -6
+docker compose --profile client build bench 2>&1 | tail -3
 for i in langgraph rocketride; do
   docker image inspect "bench-$i:latest" --format "$i {{.Id}} {{.Architecture}}" \
     >> "$RUN/image_ids.txt"
@@ -106,12 +117,14 @@ for r in $(seq 1 "$REPS"); do
     S2=$!
   else S2=""; fi
   sleep 2
-  python3 bench/lg_driver.py "$CORPUS" "$D" "$N" "$MODE"
+  docker compose --profile client run --rm bench \
+    /bench/lg_driver.py /corpus "/results/$REL/lg/rep$r" "$N" "$MODE" "$WARM"
   sleep 2
   kill $S1 ${S2:-} 2>/dev/null || true; wait $S1 ${S2:-} 2>/dev/null || true
   sleep 10   # let the service settle so rep N+1 does not inherit rep N's tail
 done
-docker compose stop langgraph
+docker compose stop langgraph tika   # tika must NOT idle on the
+                                     # arm cores during RR
 
 # ------------------------------------------------------------------ RR arm
 say "=== RocketRide — $REPS x $N docs, mode=$MODE ==="
@@ -119,34 +132,26 @@ docker compose up -d rocketride
 wait_healthy "$RR" rocketride || { echo FATAL; exit 1; }
 docker exec "$RR" sh -c 'sha256sum /opt/rocketride/engine/engine' > "$RUN/engine_sha.txt"
 docker logs "$RR" > "$RUN/engine_boot.log" 2>&1
-docker exec "$RR" mkdir -p /work/corpus
-docker cp bench/rr_driver.py "$RR:/work/rr_driver.py"
-docker cp "$CORPUS/." "$RR:/work/corpus/"
 
 for r in $(seq 1 "$REPS"); do
   D="$RUN/rr/rep$r"; mkdir -p "$D"
   say "rr rep$r/$REPS"
-  # Clear first: if the driver dies, docker cp would otherwise lift the
-  # PREVIOUS rep's records and the report would describe the wrong run.
-  docker exec "$RR" rm -rf "/work/out$r"; docker exec "$RR" mkdir -p "/work/out$r"
   docker exec -e SAMPLE_MAX_S=7200 -i "$RR" python3 - < bench/cgroup_sampler.py \
     > "$D/sampler.jsonl" 2>"$D/sampler.err" &
   S3=$!
   sleep 2
   set +e
-  docker exec -e RR_THREADS="${RR_THREADS:-}" -e RR_POOL_MAX="${RR_POOL_MAX:-0}" \
-    "$RR" python3 /work/rr_driver.py /work/corpus "/work/out$r" "$N" "$MODE" "$WARM"
+  docker compose --profile client run --rm bench \
+    /bench/rr_driver.py /corpus "/results/$REL/rr/rep$r" "$N" "$MODE" "$WARM"
   DRV=$?
   set -e
   sleep 2
   kill "$S3" 2>/dev/null || true; wait "$S3" 2>/dev/null || true
   [ "$DRV" -eq 0 ] || say "WARNING: rr driver rc=$DRV — rep$r records are suspect"
-  docker cp "$RR:/work/out$r/per_doc.jsonl" "$D/per_doc.jsonl" || true
-  docker cp "$RR:/work/out$r/manifest.json" "$D/manifest.json" || true
   sleep 10
 done
 docker logs --tail 300 "$RR" > "$RUN/engine_run.log" 2>&1 || true
-docker compose stop rocketride tika 2>/dev/null || true
+docker compose stop rocketride 2>/dev/null || true
 
 # --------------------------------------------------------------- provenance
 python3 run/write_provenance.py "$RUN"

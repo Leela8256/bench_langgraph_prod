@@ -11,7 +11,7 @@ aws_bench/
   arms/rocketride/          Dockerfile, entrypoint, probe fixtures
   pipe/benchmark_pdf.pipe   the shared pipeline contract (both arms run THIS)
   metrics/                  canonical metric logic — nothing computed elsewhere
-  bench/                    drivers, sampler, report
+  bench/                    CLIENT container + drivers, sampler, report
   corpus/fetch_govdocs.sh   corpus, downloaded on the box
   run/matched_run.sh        the run
   local/box.sh              Mac-side EC2/SSM control
@@ -22,7 +22,8 @@ aws_bench/
 ## The one rule
 
 **Only the framework may vary between arms.** Same corpus, same N, same
-document order, same envelope, same rep count, same mode, same warm-start.
+document order, same envelope, same rep count, same mode, same warm-start,
+same deadline, and the same client driving both.
 `run/matched_run.sh` enforces this and records every one of them in
 `provenance.json`; a run whose provenance is incomplete is not publishable.
 
@@ -38,7 +39,7 @@ On the box (see `local/box.sh` for getting there):
 git clone <repo> && cd <repo>/aws_bench
 bash run/preflight.sh                     # x86_64, cores, docker, disk, curl
 bash run/install_awscli.sh                # Ubuntu AMI ships no aws cli, no sudo
-bash corpus/fetch_govdocs.sh ~/bench_corpus 200
+bash corpus/fetch_govdocs.sh 200          # -> ~/bench_corpus_200
 bash run/matched_run.sh                   # blast, 200 docs, 3 reps, both arms
 ```
 
@@ -50,7 +51,8 @@ Knobs, all recorded in provenance:
 | `REPS` | 3 | repetitions per arm — 3 is the minimum for a CV |
 | `MODE` | `blast` | or `c8` for closed-loop with 8 in flight |
 | `WARM` | 25 | warm-start docs, timed separately and excluded |
-| `ARM_CPUS` / `ARM_MEM` | `12.0` / `10g` | applied to BOTH arms |
+| `ARM_CPUS` | 3/4 of host | cores per ARM; the client gets the rest |
+| memory | uncapped | measured, not enforced — see below |
 | `LG_EXTRACTOR` | `tika` | matches RocketRide's parser |
 | `RR_THREADS` | unset | unset = engine default pool |
 
@@ -118,6 +120,39 @@ identical text, so divergence enters at extraction/chunking, not embedding.
 
 Single-rep runs **cannot** pass: with no second observation determinism is
 unproven, and unproven fails closed.
+
+## Why there is a third container
+
+`bench-client` runs BOTH drivers and reaches each arm over the network. This
+is not incidental — it fixes two asymmetries that invalidated earlier runs:
+
+- **Client cost.** The RocketRide driver used to run *inside* the engine's
+  container, so its SDK reads, WebSocket framing and JSON deserialization were
+  charged to RocketRide's cgroup, while LangGraph's driver ran on the host and
+  was charged nothing. Now neither arm pays for the client.
+- **Transfer path.** RocketRide used to read container-local disk while
+  LangGraph paid for an HTTP upload inside its measured latency. Now both
+  arms receive their bytes over an equivalent network hop.
+
+The client is pinned to its own cores (`CLIENT_CPUSET`, the cores left over
+after `ARM_CPUS`) so it can never steal from the arm it is measuring.
+
+## Envelope
+
+- **CPU**: every container in an arm shares one `BENCH_CPUSET`. LangGraph's
+  arm is langgraph+tika *together*; RocketRide's is one container. Without
+  this the LG arm silently gets a second full allocation.
+- **Memory**: deliberately **not capped**. Capping per container gave the
+  two-container LG arm twice RocketRide's ceiling, an arm-total cap cannot be
+  expressed per container, and a 10g cap would have OOM-killed RocketRide
+  (measured peak 10,536 MB). Memory *granted* must be equal — unconstrained on
+  both sides is equal — and memory *used* is a reported outcome (peak RSS).
+- **Deadline**: one `BENCH_TIMEOUT_S` for both arms and both modes. Previously
+  LangGraph had 300 s per request while a RocketRide batch had 3600 s, so a
+  healthy LangGraph document could be killed by queue wait while the
+  equivalent RocketRide batch ran on for an hour.
+- **Tika is stopped before RocketRide starts**, so an idle JVM is not sitting
+  on the arm's cores holding memory during RR's measurement.
 
 ## Known, and deliberate
 

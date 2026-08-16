@@ -84,8 +84,10 @@ RUN find "$ENGINE_DIR" -name '*.txt' -exec \
 # Client SDK pinned to the version the probe was verified against.
 RUN pip install --no-cache-dir "rocketride==1.3.0"
 
+# No .pipe baked in: the bench CLIENT owns the pipeline definition and
+# sends it with use(). A second copy here drifted from the canonical
+# pipe/benchmark_pdf.pipe within a day of being created.
 WORKDIR /work
-COPY benchmark_pdf.pipe ./
 COPY data/ ./data/
 
 ENV ROCKETRIDE_URI=ws://127.0.0.1:5565/task/service \

@@ -13,6 +13,7 @@ M2). A blast run would give batch-position latency and must be labeled so.
 import hashlib
 import json
 import math
+import os
 import sys
 import threading
 import time
@@ -22,9 +23,9 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-BASE = "http://127.0.0.1:8100"
+BASE = os.environ.get("LG_URL", "http://langgraph:8100")
 PIPELINE = "document-pdf-v1"
-TIMEOUT_S = 300
+TIMEOUT_S = int(os.environ.get("BENCH_TIMEOUT_S", "3600"))
 EMBED_DIM = 384
 
 
@@ -133,6 +134,10 @@ def main():
     # seq | blast | c<N>.  blast = whole backlog submitted at once, the
     # framework schedules it. c<N> = closed loop holding N in flight.
     mode = sys.argv[4] if len(sys.argv) > 4 else "seq"
+    # MATCHED WARM-START. This arm previously received none while RocketRide
+    # got 25 real documents, and provenance still claimed both were warmed --
+    # an asymmetry the audit artifact actively misreported.
+    warm_docs = int(sys.argv[5]) if len(sys.argv) > 5 else 0
 
     corpus = sorted(corpus_dir.glob("*.pdf"))[:n]
     if not corpus:
@@ -155,6 +160,15 @@ def main():
     # monotonic. This offset is what lets m7_resources.window() slice the
     # sampler to EXACTLY the throughput window.
     mono_offset_ns = time.time_ns() - time.perf_counter_ns()
+
+    warm_s = None
+    if warm_docs > 0:
+        tw = time.perf_counter_ns()
+        with ThreadPoolExecutor(max_workers=min(warm_docs, 8)) as pool:
+            list(pool.map(one, corpus[:warm_docs]))
+        warm_s = (time.perf_counter_ns() - tw) / 1e9
+        print(f"  warm-start: {warm_docs} docs in {warm_s:.1f}s (excluded)",
+              flush=True)
 
     t0 = time.perf_counter_ns()
     records = []
@@ -189,6 +203,8 @@ def main():
             "kind": "shot_meta", "arm": "langgraph-docker", "mode": mode,
             "n_docs": len(corpus), "span_s": round(span, 2),
             "timeout_s": TIMEOUT_S,
+            "warm_docs": warm_docs,
+            "warm_s": round(warm_s, 3) if warm_s is not None else None,
             "offered_concurrency": offered,
             # What the service was TOLD vs what it actually runs: /meta reports
             # EXECUTOR_WORKERS, but nodes.py uses LangGraph's default executor,

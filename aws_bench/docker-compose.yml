@@ -17,15 +17,18 @@
 # otherwise the LG arm has 12 CPU for the service PLUS 12 for tika against
 # RocketRide's 12, and it wins by being handed twice the machine.
 # matched_run.sh derives it from ARM_CPUS; empty = full host (uncapped runs).
+# CPU is pinned as a SET shared by every container in an arm. LangGraph's arm
+# is langgraph+tika together; RocketRide's is one container. Without this the
+# LG arm silently gets a second full allocation.
+#
+# MEMORY IS DELIBERATELY NOT CAPPED. Capping per container gave the LG arm
+# 2x RocketRide's ceiling (10g + 10g vs 10g), and an arm-total cap cannot be
+# expressed per-container anyway. A 10g cap would also have OOM-killed
+# RocketRide, which peaked at 10,536 MB. Memory GRANTED must be equal --
+# unconstrained on both sides is equal -- and memory USED is a reported
+# outcome (peak RSS), not a resource grant.
 x-envelope: &envelope
   cpuset: "${BENCH_CPUSET:-}"
-  deploy:
-    resources:
-      limits:
-        cpus: "${ARM_CPUS:-12.0}"
-        memory: ${ARM_MEM:-10g}
-      reservations:
-        memory: 1g
 
 services:
   langgraph:
@@ -90,6 +93,33 @@ services:
       timeout: 5s
       retries: 30
       start_period: 30s
+
+  bench:
+    # The CLIENT. Drives both arms over the network so client CPU/RSS lands in
+    # neither server's cgroup, and both arms receive bytes over an equivalent
+    # hop. Pinned to its OWN cores so it cannot steal from the arm under test.
+    build:
+      context: ./bench
+      dockerfile: bench.Dockerfile
+    image: bench-client:latest
+    platform: linux/amd64
+    container_name: bench-client
+    profiles: ["client"]          # never started by `up`; used via `compose run`
+    cpuset: "${CLIENT_CPUSET:-}"
+    environment:
+      LG_URL: "http://langgraph:8100"
+      ROCKETRIDE_URI: "ws://rocketride:5565/task/service"
+      ROCKETRIDE_APIKEY: local-dev
+      BENCH_TIMEOUT_S: "${BENCH_TIMEOUT_S:-3600}"
+      BENCH_PIPE: /pipe/benchmark_pdf.pipe
+      BENCH_WARMUP_DOC: /probe/sample.pdf
+      RR_THREADS: "${RR_THREADS:-}"
+      RR_POOL_MAX: "${RR_POOL_MAX:-0}"
+    volumes:
+      - "${CORPUS}:/corpus:ro"
+      - ./results:/results
+      - ./pipe:/pipe:ro
+      - ./arms/rocketride/data/probe:/probe:ro
 
   tika:
     # Pinned to the Tika the RocketRide engine bundles (3.2.3), loaded with

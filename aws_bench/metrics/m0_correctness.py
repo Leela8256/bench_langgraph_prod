@@ -273,6 +273,41 @@ def cross_arm(rows_a: List[Dict], rows_b: List[Dict],
     }
 
 
+def input_integrity(rows: List[Dict],
+                    manifest_sha: Dict[str, str]) -> Dict[str, Any]:
+    """Every record's input_sha256 must equal the canonical corpus manifest.
+
+    Records carry the hash of the bytes the driver actually read. Nothing
+    previously compared it to anything, so a corpus that drifted between arms
+    or between reps -- a stale file, a partial copy, a re-fetch that picked
+    different documents -- would produce a clean-looking run over different
+    inputs. Because both arms are checked against the SAME manifest, matching
+    it also proves the two arms read identical bytes.
+
+    A record with no input_sha256 is UNVERIFIED, which fails: absence of
+    evidence is absence of correctness.
+    """
+    mismatched, unverified, unknown = [], [], []
+    for r in rows:
+        doc, got = r["doc"], r.get("input_sha256")
+        want = manifest_sha.get(doc)
+        if want is None:
+            unknown.append(doc)
+        elif not got:
+            unverified.append(doc)
+        elif got != want:
+            mismatched.append(doc)
+    return {
+        "checked": len(rows),
+        "manifest_docs": len(manifest_sha),
+        "mismatched_docs": mismatched[:15],
+        "unverified_docs": unverified[:15],
+        "not_in_manifest": unknown[:15],
+        "PASS": bool(rows) and bool(manifest_sha)
+                and not mismatched and not unverified and not unknown,
+    }
+
+
 def parity_fixture(vec_a: Optional[List[float]], vec_b: Optional[List[float]],
                    atol: float = 1e-5) -> Dict[str, Any]:
     if not (isinstance(vec_a, list) and isinstance(vec_b, list)

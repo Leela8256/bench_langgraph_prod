@@ -157,3 +157,48 @@ def efficiency(successful_docs: Optional[int], cpu_seconds: Optional[float],
                 cpu_seconds / (wall_seconds * available_cpus), 4)
             out["host_cpus"] = available_cpus
     return out
+
+
+def combined_peak_rss(path_a, path_b, t0_ns=None, t1_ns=None,
+                      mono_offset_ns=None, tolerance_s: float = 1.0
+                      ) -> Optional[Dict[str, Any]]:
+    """Peak of (A + B) at the SAME instant, not peak(A) + peak(B).
+
+    An arm made of two containers has one real memory high-water mark: the
+    largest simultaneous sum. Adding independent peaks overstates it whenever
+    they occur at different times, which for a parse-then-embed pipeline they
+    routinely do -- the parser peaks early, the embedder later.
+
+    Samples are matched by wall-clock ts within `tolerance_s`; an A sample with
+    no contemporaneous B sample is skipped rather than paired with a distant
+    one.
+    """
+    a, b = _load(path_a), _load(path_b)
+    if len(a) < 2 or len(b) < 2:
+        return None
+    lo = hi = None
+    if t0_ns is not None and t1_ns is not None and mono_offset_ns is not None:
+        lo = (t0_ns + mono_offset_ns) / 1e9
+        hi = (t1_ns + mono_offset_ns) / 1e9
+        a = [x for x in a if lo <= x["ts"] <= hi] or a
+    b_sorted = sorted(b, key=lambda x: x["ts"])
+    ts_b = [x["ts"] for x in b_sorted]
+    import bisect
+    best = None
+    for sa in a:
+        i = bisect.bisect_left(ts_b, sa["ts"])
+        cands = [j for j in (i - 1, i) if 0 <= j < len(b_sorted)]
+        if not cands:
+            continue
+        j = min(cands, key=lambda k: abs(ts_b[k] - sa["ts"]))
+        if abs(ts_b[j] - sa["ts"]) > tolerance_s:
+            continue
+        total = sa["rss_mb_sum"] + b_sorted[j]["rss_mb_sum"]
+        if best is None or total > best["combined_mb"]:
+            best = {"combined_mb": round(total, 1), "ts": sa["ts"],
+                    "a_mb": sa["rss_mb_sum"], "b_mb": b_sorted[j]["rss_mb_sum"]}
+    if best is None:
+        return {"error": "no contemporaneous samples within tolerance"}
+    best["method"] = "max of simultaneous sum (NOT peak_a + peak_b)"
+    best["tolerance_s"] = tolerance_s
+    return best
