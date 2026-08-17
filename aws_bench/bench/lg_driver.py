@@ -119,6 +119,9 @@ def one(pdf: Path):
         rec["completion_ns"] = time.perf_counter_ns()
         body = exc.read()[:300].decode(errors="replace")
         rec["reason"] = f"http_{exc.code}"
+        # M5 distinguishes SERVER-surfaced failure from client-inferred; it
+        # keys on http_status, so record the code as a field, not just text.
+        rec["http_status"] = exc.code
         rec["error"] = body
     except Exception as exc:
         rec["completion_ns"] = time.perf_counter_ns()
