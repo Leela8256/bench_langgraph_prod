@@ -92,7 +92,10 @@ sample() {  # $1 container, $2 outfile -- a short burst, not a stream
 }
 
 run_arm() {   # $1 arm-key  $2 container  $3 driver  $4 mode
-  local arm="$1" cont="$2" drv="$3" md="$4" D="$RUN/$arm/rep1"
+  # Declared separately on purpose: referencing $arm inside the same `local`
+  # statement that declares it trips `set -u`.
+  local arm="$1" cont="$2" drv="$3" md="$4"
+  local D="$RUN/$arm/rep1"
   mkdir -p "$D"
   say "=== $arm: mode=$md, $N_TOTAL docs (incl 4 poison) ==="
   if [ "$arm" = lg ] && [ "$LG_EXTRACTOR" = tika ]; then docker compose up -d tika; fi
