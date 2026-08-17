@@ -215,6 +215,12 @@ async def main():
     use_kwargs = dict(filepath=str(pipe_path), use_existing=True, ttl=7200)
     if threads:
         use_kwargs["threads"] = threads
+    if threads:
+        # Prove the value reached use(). "threads requested" is a claim in
+        # provenance; this makes it a verified one. It is still NOT evidence
+        # that the engine activated that many workers.
+        assert use_kwargs.get("threads") == threads, (
+            f"threads={threads} did not reach use(): {use_kwargs}")
     used = await client.use(**use_kwargs)
     token = used["token"]
     print(f"[rr] pipeline up, token={token}, "

@@ -90,6 +90,34 @@ python3 bench/report.py ./run          # same numbers, on your laptop
   worker processes it, which pinned average parallelism near 6 cores while the
   parallel phase ran at ~61 chunks/s. Read the distribution, not just the mean.
 
+## Modes
+
+| mode | LangGraph | RocketRide |
+|---|---|---|
+| `seq` | 1 request at a time | 1 doc per SDK call |
+| `c<N>` | N-wide HTTP window | N in flight, per-doc calls |
+| `blast` | N-wide window (N = corpus) | ONE whole-corpus SDK batch |
+| `native_saturation` | `c<LG_CLIENT_WINDOW>` (default 128) | `blast` |
+
+`native_saturation` runs **each arm's own ingestion path**, because they are
+not the same interface: LangGraph is an HTTP service kept supplied by a
+bounded client window, RocketRide takes the whole backlog in one call and
+schedules it internally. Forcing them to match would benchmark our misuse of
+one API rather than either product — we measured per-document RocketRide
+submission at roughly a third of its batched throughput.
+
+**Fairness lives in the equal cpuset, not the interface.** Both arms are held
+to the same `ARM_CPUS` cores with `OMP_NUM_THREADS=1`. A run in this mode must
+never be described as an equal-submission, equal-thread-count or
+equal-concurrency comparison.
+
+`RR_THREADS` may exceed `ARM_CPUS` (32 threads on 24 cores = 1.33x
+oversubscription). Provenance records `threads_requested` and derives
+`oversubscription_ratio`; `threads_observed` stays **null** because the
+engine's pool size is not visible from the client. **Threads requested is not
+threads activated and is not effective cores** — the last of those is measured
+from the cgroup.
+
 ## The correctness gate
 
 A run is PASS only if every arm passes M0 **and** the two arms are proven to

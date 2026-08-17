@@ -88,8 +88,32 @@ def main():
         "warmup_policy": f"{env.get('warm_docs')} docs, timed separately, excluded",
         "timeout_s": 300,
         "mode": env.get("mode"),
+        # The two arms are NOT running the same submission interface in
+        # native_saturation. Recorded field by field so no reader can assume
+        # symmetry, and so "threads requested" is never read as "threads
+        # activated" or as effective cores.
+        "benchmark_mode": env.get("mode"),
+        "langgraph_driver_mode": env.get("lg_mode"),
+        "langgraph_submission": "bounded closed-loop HTTP window",
+        "langgraph_client_window": int(env.get("lg_client_window") or 0) or None,
+        "langgraph_server_executor_policy": "default min(32, cpu_count+4); "
+                                            "/meta's executor_workers is INERT",
+        "rocketride_driver_mode": env.get("rr_mode"),
+        "rocketride_submission": "one whole-corpus SDK batch",
+        "rocketride_threads_requested": int(env.get("rr_threads"))
+            if (env.get("rr_threads") or "").isdigit() else None,
+        "rocketride_threads_observed": None,   # engine pool is not observable
+        "rocketride_cpu_cores_allocated": float(env.get("arm_cpus") or 0) or None,
+        "omp_num_threads": 1,
+        "measured_documents": int(env.get("n_docs") or 0) or None,
         "reps": int(env.get("reps") or 0) or None,
     }
+    thr = rec.get("rocketride_threads_requested")
+    cores = rec.get("rocketride_cpu_cores_allocated")
+    if thr and cores:
+        rec["rocketride_oversubscribed"] = thr > cores
+        rec["rocketride_oversubscription_ratio"] = round(thr / cores, 4)
+
     (run / "provenance.json").write_text(json.dumps(rec, indent=1))
 
     verdict = check(rec)

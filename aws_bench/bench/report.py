@@ -56,6 +56,10 @@ def rep_report(d: Path, arm: str, cpus, arm_cpus, mode: str,
     rows, meta, _ = load_records(f)
     manifest = json.loads((d / "manifest.json").read_text())
     meta = meta or {}
+    # The DRIVER records what it actually ran. In native_saturation the two
+    # arms run different modes, so a single run-level value would mislabel one
+    # of them -- and latency semantics depend on this.
+    mode = meta.get("mode") or mode
     closed_loop = mode.startswith("c") and mode[1:].isdigit()
     # A batch response carries no per-document timestamps, so the driver marks
     # what clock each record used. Latency is publishable only when the times
@@ -230,6 +234,8 @@ def main():
             continue
         out["arms"][name] = arm_report(run, arm, cpus, arm_cpus, mode,
                                        manifest_sha, want_reps)
+        out["arms"][name]["mode"] = (
+            (out["arms"][name]["reps"][0] or {}).get("mode") or mode)
 
     # ---- cross-arm, EVERY rep ------------------------------------------
     matched = (env.get("lg_extractor") == "tika")
@@ -263,15 +269,20 @@ def main():
     (run / "RUN_REPORT.json").write_text(json.dumps(out, indent=1, default=str))
     print(json.dumps(out, indent=1, default=str))
 
-    closed = mode.startswith("c") and mode[1:].isdigit()
     print("\n" + "=" * 74)
-    print(f"MODE {mode.upper()} — latency is "
-          f"{'SERVICE (closed-loop)' if closed else 'BATCH-POSITION (blast)'}"
-          f"; warm-up excluded by the driver")
+    print(f"MODE {mode.upper()} — warm-up excluded by the driver")
+    if mode == "native_saturation":
+        print("  NOT an equal-submission comparison: each arm runs its own")
+        print("  native ingestion path. Equal 24-core cpuset is the fairness")
+        print("  boundary, not equal interface or equal thread count.")
     for name, a in out["arms"].items():
         s = a["stability"]
         dup = (a["reps"][0] or {}).get("self_duplication") or {}
-        print(f"\n{name}:  M0 {'PASS' if a['m0_PASS'] else 'FAIL'}   "
+        am = a.get("mode", mode)
+        lab = ("SERVICE" if (am.startswith("c") and am[1:].isdigit())
+               else "BATCH-POSITION")
+        print(f"\n{name} [{am}, latency={lab}]:  "
+              f"M0 {'PASS' if a['m0_PASS'] else 'FAIL'}   "
               f"reps={a['rep_count']}/{a['rep_count_expected']}   "
               f"determinism={a['determinism_PASS']}   "
               f"self_dup={dup.get('duplicated_docs')}/{dup.get('checked')} "

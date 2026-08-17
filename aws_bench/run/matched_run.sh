@@ -21,6 +21,19 @@ HERE="$(cd "$(dirname "$0")/.." && pwd)"; cd "$HERE"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 RUN="$HERE/results/${STAMP}_${MODE:-blast}"
 N="${N:-200}"; REPS="${REPS:-3}"; WARM="${WARM:-25}"; MODE="${MODE:-blast}"
+# native_saturation: each arm runs its OWN native ingestion path, because they
+# are not the same interface. LangGraph is an HTTP service kept supplied by a
+# bounded client window; RocketRide takes the whole backlog in one SDK batch
+# and schedules it internally. This is a saturation comparison, NOT an
+# equal-submission-interface or equal-thread-count comparison. Both arms are
+# still held to the SAME cpuset, which is where fairness actually lives.
+LG_CLIENT_WINDOW="${LG_CLIENT_WINDOW:-128}"
+if [ "$MODE" = "native_saturation" ]; then
+  LG_MODE="c${LG_CLIENT_WINDOW}"
+  RR_MODE="blast"
+else
+  LG_MODE="$MODE"; RR_MODE="$MODE"
+fi
 # Corpus dir is derived FROM N, so the two cannot drift apart. Override
 # CORPUS only to point at a deliberately different document set.
 # CORPUS_OFFSET selects a DISJOINT document set. The dir name encodes N and
@@ -69,6 +82,8 @@ have=$(find "$CORPUS" -name '*.pdf' | wc -l | tr -d ' ')
   echo "git_dirty=$(git status --porcelain | wc -l | tr -d ' ')"
   echo "corpus=$CORPUS"; echo "n_docs=$N"; echo "reps=$REPS"; echo "mode=$MODE"
   echo "corpus_offset=$CORPUS_OFFSET"
+  echo "lg_mode=$LG_MODE"; echo "rr_mode=$RR_MODE"
+  echo "lg_client_window=$LG_CLIENT_WINDOW"
   echo "warm_docs=$WARM"; echo "arm_cpus=$ARM_CPUS"
   echo "arm_mem=UNCAPPED (measured, not enforced)"
   echo "bench_cpuset=$BENCH_CPUSET"; echo "client_cpuset=$CLIENT_CPUSET"
@@ -81,6 +96,20 @@ have=$(find "$CORPUS" -name '*.pdf' | wc -l | tr -d ' ')
 cp "$CORPUS/SHA256SUMS" "$RUN/corpus.sha256"
 cp "$CORPUS/corpus_manifest.json" "$RUN/corpus_manifest.json"
 
+cat <<BANNER
+--------------------------------------------------------------------
+benchmark_mode=$MODE
+measured_documents=$N
+langgraph_mode=$LG_MODE   (bounded closed-loop HTTP window)
+langgraph_client_window=$LG_CLIENT_WINDOW
+langgraph_server_executor=default (~min(32, cpu_count+4) workers, INERT config)
+rocketride_mode=$RR_MODE  (one whole-corpus SDK batch)
+rocketride_threads_requested=${RR_THREADS:-unset (engine default)}
+rocketride_arm_cpus=$ARM_CPUS
+omp_num_threads=1 (pinned on BOTH arms)
+NOTE: threads requested != threads activated != effective cores.
+--------------------------------------------------------------------
+BANNER
 say "building both arms + bench client"
 docker compose build --build-arg RR_DUP_PATCH="$RR_DUP_PATCH" \
   langgraph rocketride 2>&1 | tail -6
@@ -105,7 +134,7 @@ wait_healthy() {  # $1 container, $2 service
 }
 
 # ------------------------------------------------------------------ LG arm
-say "=== LangGraph — $REPS x $N docs, mode=$MODE ==="
+say "=== LangGraph — $REPS x $N docs, mode=$LG_MODE ==="
 [ "$LG_EXTRACTOR" = tika ] && docker compose up -d tika
 docker compose up -d langgraph
 wait_healthy "$LG" langgraph || { echo FATAL; exit 1; }
@@ -127,7 +156,7 @@ for r in $(seq 1 "$REPS"); do
   else S2=""; fi
   sleep 2
   docker compose --profile client run --rm bench \
-    /bench/lg_driver.py /corpus "/results/$REL/lg/rep$r" "$N" "$MODE" "$WARM"
+    /bench/lg_driver.py /corpus "/results/$REL/lg/rep$r" "$N" "$LG_MODE" "$WARM"
   sleep 2
   kill $S1 ${S2:-} 2>/dev/null || true; wait $S1 ${S2:-} 2>/dev/null || true
   sleep 10   # let the service settle so rep N+1 does not inherit rep N's tail
@@ -136,7 +165,7 @@ docker compose stop langgraph tika   # tika must NOT idle on the
                                      # arm cores during RR
 
 # ------------------------------------------------------------------ RR arm
-say "=== RocketRide — $REPS x $N docs, mode=$MODE ==="
+say "=== RocketRide — $REPS x $N docs, mode=$RR_MODE ==="
 docker compose up -d rocketride
 wait_healthy "$RR" rocketride || { echo FATAL; exit 1; }
 docker exec "$RR" sh -c 'sha256sum /opt/rocketride/engine/engine' > "$RUN/engine_sha.txt"
@@ -151,7 +180,7 @@ for r in $(seq 1 "$REPS"); do
   sleep 2
   set +e
   docker compose --profile client run --rm bench \
-    /bench/rr_driver.py /corpus "/results/$REL/rr/rep$r" "$N" "$MODE" "$WARM"
+    /bench/rr_driver.py /corpus "/results/$REL/rr/rep$r" "$N" "$RR_MODE" "$WARM"
   DRV=$?
   set -e
   sleep 2
