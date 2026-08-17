@@ -20,7 +20,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 RUN pip install --no-cache-dir "rocketride==1.3.0"
 
 WORKDIR /bench
-COPY lg_driver.py rr_driver.py cgroup_sampler.py ./
+COPY lg_driver.py rr_driver.py cgroup_sampler.py verify_output.py ./
 
 # Corpus, results and the pipe are mounted at run time, never baked in.
 ENTRYPOINT ["python3"]
