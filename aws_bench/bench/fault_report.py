@@ -79,7 +79,7 @@ def main():
     env = dict(l.split("=", 1) for l in (run / "environment.txt").read_text()
                .splitlines() if "=" in l)
 
-    baseline = {}
+    baseline, independent = {}, {}
     if base_dir:
         for arm in ARMS:
             p = base_dir / arm / "rep1" / "per_doc.jsonl"
@@ -87,6 +87,10 @@ def main():
                 rows, _, _ = load_records(p)
                 baseline[arm] = {r["doc"]: r.get("chunk_sha256")
                                  for r in ok_records(rows)}
+                # Docs that fail in the CLEAN baseline fail regardless of any
+                # fault; counting them as collateral manufactures damage.
+                bad = {r["doc"] for r in rows if not r.get("ok")}
+                independent[arm] = {d for d, o in name_map.items() if o in bad}
 
     out = {"run": run.name, "mode": env.get("mode"), "environment": env,
            "faults": fm["faults"], "arms": {}}
@@ -107,7 +111,8 @@ def main():
         rep["self_duplication"] = self_duplication(rows)
 
         # M4
-        rep["m4_blast_radius"] = blast_radius(rows, fault_docs)
+        rep["m4_blast_radius"] = blast_radius(
+            rows, fault_docs, independent_failures=independent.get(arm))
 
         # M5 — pre/post FAULT baselines, not run-boundary ones
         pre = d / "resources_pre_fault.jsonl"

@@ -11,14 +11,26 @@ from metrics.records import by_completion, ok_records
 
 
 def blast_radius(rows: List[Dict], fault_docs: List[str],
-                 window_s: float = 60.0) -> Dict[str, Any]:
+                 window_s: float = 60.0,
+                 independent_failures: Optional[set] = None) -> Dict[str, Any]:
     """Per fault: collateral unrelated failures + time-to-next-success.
 
-    Collateral = unrelated docs whose FAILURE completes within window_s
-    after the fault doc's outcome (attribution window; wedges show up as
-    long unbroken failure runs and are counted fully).
+    Collateral = unrelated docs whose FAILURE completes within window_s after
+    a fault doc's outcome.
+
+    Two corrections learned from the first real fault run, where both arms
+    reported non-zero collateral that was not collateral at all:
+
+    1. `independent_failures` excludes documents that fail REGARDLESS of the
+       fault -- a text-free PDF fails in clean runs too, and blaming it on a
+       nearby poison document manufactures damage that did not happen. Pass
+       the set of docs known to fail from a clean baseline run.
+    2. total_collateral counts DISTINCT documents. With four faults inside one
+       60 s window, a single unrelated failure was previously counted once per
+       fault, reporting 3 for what was one document.
     """
     fault_set = set(fault_docs)
+    independent = set(independent_failures or ())
     done = by_completion(rows)
     out = {}
     for fd in fault_docs:
@@ -29,6 +41,7 @@ def blast_radius(rows: List[Dict], fault_docs: List[str],
         t_fault = frec["completion_ns"]
         collateral = [r["doc"] for r in done
                       if r["doc"] not in fault_set and not r.get("ok")
+                      and r["doc"] not in independent
                       and 0 <= (r["completion_ns"] - t_fault) / 1e9 <= window_s]
         nxt = next((r for r in done if r["completion_ns"] > t_fault
                     and r.get("ok") and r["doc"] not in fault_set), None)
@@ -39,10 +52,15 @@ def blast_radius(rows: List[Dict], fault_docs: List[str],
             "time_to_next_success_s":
                 round((nxt["completion_ns"] - t_fault) / 1e9, 2) if nxt else None,
         }
-    total = sum(v.get("collateral_count", 0) for v in out.values()
-                if isinstance(v, dict))
-    return {"per_fault": out, "total_collateral": total,
-            "PASS_zero_blast": total == 0}
+    distinct = sorted({d for v in out.values() if isinstance(v, dict)
+                       for d in v.get("collateral_docs", [])})
+    return {"per_fault": out,
+            # DISTINCT, not the sum of per-fault counts: overlapping windows
+            # would otherwise multiply one failure by the number of faults.
+            "total_collateral": len(distinct),
+            "collateral_docs_distinct": distinct,
+            "excluded_independent_failures": sorted(independent),
+            "PASS_zero_blast": not distinct}
 
 
 def fault_isolation(rows: List[Dict], fault_docs: List[str],
