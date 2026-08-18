@@ -73,7 +73,10 @@ def rep_report(d: Path, arm: str, cpus, arm_cpus, mode: str,
     # arms run different modes, so a single run-level value would mislabel one
     # of them -- and latency semantics depend on this.
     mode = meta.get("mode") or mode
-    closed_loop = mode.startswith("c") and mode[1:].isdigit()
+    # seq IS a closed loop -- one request in flight, completion observed per
+    # document. Its latency is service latency; only blast (whole backlog
+    # submitted at once) measures queue position.
+    closed_loop = mode == "seq" or (mode.startswith("c") and mode[1:].isdigit())
     # A batch response carries no per-document timestamps, so the driver marks
     # what clock each record used. Latency is publishable only when the times
     # were CLIENT-OBSERVED; values reconstructed from the engine's own
@@ -250,6 +253,38 @@ def main():
                                        manifest_sha, want_reps)
         out["arms"][name]["mode"] = (
             (out["arms"][name]["reps"][0] or {}).get("mode") or mode)
+
+    # ---- determinism by concurrency-invariance -------------------------
+    # With one rep, rep-to-rep determinism is unprovable and the gate fails
+    # closed. But if bench/cross_mode_determinism.py has compared this run
+    # against a run at a DIFFERENT concurrency (c128 vs seq) and the shared
+    # docs were byte-identical, that is accepted as the determinism evidence:
+    # it rules out the racing-output class directly. The basis is recorded --
+    # invariance across concurrency is not the same claim as repeatability
+    # across runs, and a reader must see which one was proven. A FAILED
+    # invariance check fails the arm outright, evidence beats absence.
+    cmd_f = run / "CROSS_MODE_DETERMINISM.json"
+    if cmd_f.exists():
+        cmd = json.loads(cmd_f.read_text())
+        for name, a in out["arms"].items():
+            v = (cmd.get("arms") or {}).get(name) or {}
+            if v.get("PASS") is True and a.get("determinism_PASS") is None:
+                a["determinism_PASS"] = True
+                a["determinism"] = {
+                    "basis": "concurrency-invariance "
+                             f"({v.get('mode_a')} vs {v.get('mode_b')}, "
+                             f"{v.get('identical')}/{v.get('compared')} identical)",
+                    "cross_mode": v}
+                good = [r for r in a["reps"] if not r.get("error")]
+                a["m0_PASS"] = (bool(good) and a.get("rep_count_ok")
+                                and all(r.get("m0_PASS_partial") for r in good))
+            elif v.get("PASS") is False and (v.get("compared") or 0) > 0:
+                # Genuine mismatches on shared docs. compared == 0 is NO
+                # evidence (disjoint corpora), never a failure verdict.
+                a["determinism_PASS"] = False
+                a["determinism"] = {"basis": "concurrency-invariance FAILED",
+                                    "cross_mode": v}
+                a["m0_PASS"] = False
 
     # ---- cross-arm, EVERY rep ------------------------------------------
     matched = (env.get("lg_extractor") == "tika")

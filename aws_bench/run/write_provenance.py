@@ -118,7 +118,9 @@ def main():
         },
         "envelope": {"cpus": env.get("arm_cpus"), "memory": env.get("arm_mem")},
         "warmup_policy": f"{env.get('warm_docs')} docs, timed separately, excluded",
-        "timeout_s": 300,
+        # From the run's own environment, never a constant: a hardcoded value
+        # here once recorded 300 for runs that actually ran 3600/7200.
+        "timeout_s": int(env["timeout_s"]) if str(env.get("timeout_s", "")).isdigit() else env.get("timeout_s"),
         "mode": env.get("mode"),
         # The two arms are NOT running the same submission interface in
         # native_saturation. Recorded field by field so no reader can assume
