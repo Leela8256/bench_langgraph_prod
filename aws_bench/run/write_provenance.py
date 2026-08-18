@@ -47,6 +47,34 @@ def main():
         import hashlib
         corpus_sha = hashlib.sha256(p.read_bytes()).hexdigest()
 
+    # The pipe is THE shared contract, and until now it was the one artifact
+    # with no fingerprint in provenance. A raw file hash is the wrong one: the
+    # visual editor rewrites viewport/ui/docRevision on any open-and-save, so
+    # the raw hash changes while the pipeline does not. Hash the canonicalised
+    # COMPONENTS instead -- stable across editor saves, sensitive to any real
+    # change in nodes, providers, config or lane wiring.
+    pipe_sha = pipe_raw_sha = None
+    for cand in (run / "pipeline.pipe", *sorted(run.glob("*/rep1/pipeline.pipe"))):
+        if not cand.exists():
+            continue
+        import hashlib
+        try:
+            doc = json.loads(cand.read_text())
+        except Exception:
+            break
+        def _strip(o):
+            drop = ("ui", "name", "viewport", "snapToGrid", "snapGridSize",
+                    "isLocked", "docRevision")
+            if isinstance(o, dict):
+                return {k: _strip(v) for k, v in o.items() if k not in drop}
+            if isinstance(o, list):
+                return [_strip(x) for x in o]
+            return o
+        canon = json.dumps(_strip(doc.get("components")), sort_keys=True)
+        pipe_sha = hashlib.sha256(canon.encode()).hexdigest()
+        pipe_raw_sha = hashlib.sha256(cand.read_bytes()).hexdigest()
+        break
+
     rec = {
         "run_id": run.name,
         "timestamp_utc": env.get("stamp_utc"),
@@ -73,6 +101,10 @@ def main():
         "cpu_count": int(env.get("nproc") or 0) or None,
         "ram_gb": int(env.get("mem_gb") or 0) or None,
         "corpus_manifest_sha256": corpus_sha,
+        # Canonicalised pipeline contract; see the comment above for why this
+        # is not a raw file hash. Compare THIS across runs and across teams.
+        "pipe_components_sha256": pipe_sha,
+        "pipe_file_sha256": pipe_raw_sha,
         "corpus_n_docs": int(env.get("n_docs") or 0) or None,
         "parser": env.get("lg_extractor"),
         "parser_config_hash": wv.get("extractor"),

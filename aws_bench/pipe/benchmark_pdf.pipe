@@ -3,34 +3,16 @@
     {
       "id": "webhook_1",
       "provider": "webhook",
-      "name": "Webhook",
       "config": {
         "hideForm": true,
         "type": "webhook",
         "mode": "Source"
-      },
-      "ui": {
-        "position": {
-          "x": -2020,
-          "y": 570
-        },
-        "nodeType": "default",
-        "formDataValid": true
       }
     },
     {
       "id": "parse_1",
       "provider": "parse",
-      "name": "Parser",
       "config": {},
-      "ui": {
-        "position": {
-          "x": -1520,
-          "y": 510
-        },
-        "nodeType": "default",
-        "formDataValid": true
-      },
       "input": [
         {
           "lane": "tags",
@@ -41,21 +23,12 @@
     {
       "id": "preprocessor_1",
       "provider": "preprocessor_langchain",
-      "name": "General Text",
       "config": {
         "profile": "default",
         "default": {
           "splitter": "RecursiveCharacterTextSplitter",
           "mode": "strlen"
         }
-      },
-      "ui": {
-        "position": {
-          "x": -1190,
-          "y": 580
-        },
-        "nodeType": "default",
-        "formDataValid": true
       },
       "input": [
         {
@@ -71,17 +44,8 @@
     {
       "id": "embedding_1",
       "provider": "embedding_transformer",
-      "name": "Transformer",
       "config": {
         "profile": "miniLM"
-      },
-      "ui": {
-        "position": {
-          "x": -930,
-          "y": 610
-        },
-        "nodeType": "default",
-        "formDataValid": true
       },
       "input": [
         {
@@ -93,17 +57,8 @@
     {
       "id": "response_1",
       "provider": "response_documents",
-      "name": "Return Documents",
       "config": {
         "laneName": "documents"
-      },
-      "ui": {
-        "position": {
-          "x": -630,
-          "y": 600
-        },
-        "nodeType": "default",
-        "formDataValid": true
       },
       "input": [
         {
@@ -114,12 +69,10 @@
     }
   ],
   "project_id": "2798d17f-e9f1-431c-817a-4bf12223aa31",
-  "version": 1,
-  "isLocked": false,
-  "snapToGrid": true,
-  "snapGridSize": [
-    10,
-    10
-  ],
-  "docRevision": 15
+  "viewport": {
+    "x": 0,
+    "y": 0,
+    "zoom": 1
+  },
+  "version": 1
 }
