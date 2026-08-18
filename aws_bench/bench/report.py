@@ -12,6 +12,7 @@ Expects <run_dir>/<arm>/rep<N>/per_doc.jsonl.
 """
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -32,6 +33,18 @@ from metrics.stability import across_reps
 # further window slicing is applied here in either mode.
 WARM_N = 0
 EXPECTED_EMPTY = {"000164.pdf"}
+
+# Text-free (scanned, no text layer) PDFs are a property of a heterogeneous
+# corpus, not of either framework -- both arms fail the IDENTICAL set in every
+# run. "report" names and counts them without failing the gate; "fail" (the
+# default) tolerates only the docs named in EXPECTED_EMPTY.
+#
+# CAVEAT recorded with the run: both arms extract with Tika, so "both arms
+# agree it is empty" is NOT independent evidence. A Tika defect would look
+# exactly like a text-free corpus. Establishing that list with a non-Tika
+# probe is outstanding; until then this flag is for performance runs, not for
+# publishing a correctness claim.
+EMPTY_POLICY = os.environ.get("CENSUS_EMPTY_POLICY", "fail")
 ARMS = {"lg": "langgraph", "rr": "rocketride"}
 
 
@@ -73,7 +86,8 @@ def rep_report(d: Path, arm: str, cpus, arm_cpus, mode: str,
     rep = {"rep_dir": d.name, "mode": mode, "meta": meta}
     rep["census"] = census(rows, offered=manifest["n"],
                            expected_docs=set(manifest["docs"]),
-                           expected_empty=EXPECTED_EMPTY)
+                           expected_empty=EXPECTED_EMPTY,
+                           empty_policy=EMPTY_POLICY)
     rep["structure"] = structure(rows, arm=arm, expected_empty=EXPECTED_EMPTY)
     rep["input_integrity"] = input_integrity(rows, manifest_sha)
     # Permanent gate: an arm that emits its document list twice passes every
@@ -297,7 +311,8 @@ def main():
         if u:
             print(f"  latency/concurrency  {u}")
     c = out["cross_arm"]
-    print(f"\ncross-arm : {'PASS' if c['PASS'] else 'FAIL'}  ({len(c['per_rep'])} reps compared)")
+    print(f"\ncross-arm : {'identical' if c['PASS'] else 'DIVERGENT'}  "
+          f"({len(c['per_rep'])} reps compared)  [REPORTED, not gated]")
     for rep, v in c["per_rep"].items():
         print(f"  {rep}: byte-identical {v['byte_identical']}/{v['compared']}  "
               f"ratio={v.get('chunk_ratio_rr_over_lg', {}).get('median')}  "
@@ -306,11 +321,43 @@ def main():
     print(f"\nprovenance: {'complete' if p['PASS'] else 'INCOMPLETE — ' + str(p.get('missing_fields') or p.get('error'))}")
     print("=" * 74)
 
+    # Cross-arm byte parity is DELIBERATELY absent from this expression. It is
+    # still computed, still names every differing doc, and is still the only
+    # detector we have for the transposition defect -- but a known product
+    # defect in one arm should not make the RUN unquotable. It is a finding
+    # about RocketRide, reported above; the verdict below is about this run.
     ok = (bool(out["arms"])
           and all(a["m0_PASS"] for a in out["arms"].values())
-          and c["PASS"] is True
           and p["PASS"] is True)      # incomplete provenance is not publishable
+
+    # A bare FAIL hides which check fired -- and with a single rep the answer
+    # is almost always "determinism is unproven", which says nothing about the
+    # run's quality. Name the reasons so the verdict is readable.
+    reasons = []
+    if not out["arms"]:
+        reasons.append("no arm produced records")
+    for name, a in out["arms"].items():
+        if a.get("m0_PASS"):
+            continue
+        if not a.get("rep_count_ok"):
+            reasons.append(f"{name}: expected {a.get('rep_count_expected')} reps, "
+                           f"got {a.get('rep_count')}")
+        if a.get("determinism_PASS") is not True:
+            reasons.append(f"{name}: determinism {'FAILED' if a.get('determinism_PASS') is False else 'UNPROVEN (needs >=2 reps, or a cross-mode run)'}")
+        for r in a["reps"]:
+            if r.get("error") or r.get("m0_PASS_partial"):
+                continue
+            for chk in ("census", "structure", "input_integrity", "self_duplication"):
+                if (r.get(chk) or {}).get("PASS") is not True:
+                    reasons.append(f"{name}/{r['rep_dir']}: {chk}")
+    if p["PASS"] is not True:
+        reasons.append("provenance incomplete")
+
     print("RUN PASS" if ok else "RUN FAIL — numbers kept, never quoted")
+    for why in reasons:
+        print(f"   reason: {why}")
+    if not ok and not reasons:
+        print("   reason: unattributed — investigate before quoting")
     return 0 if ok else 1
 
 

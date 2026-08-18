@@ -49,14 +49,25 @@ HOSTCPUS="$(nproc)"
 ARM_CPUS="${ARM_CPUS:-$(( HOSTCPUS * 3 / 4 ))}"
 _n=${ARM_CPUS%%.*}
 : "${BENCH_CPUSET:=0-$(( _n - 1 ))}"
-: "${CLIENT_CPUSET:=${_n}-$(( HOSTCPUS - 1 ))}"
-export ARM_CPUS BENCH_CPUSET CLIENT_CPUSET
+# When the arm takes the WHOLE host there are no cores left to isolate the
+# client onto; the default would compute an inverted range (e.g. "32-31") and
+# docker rejects it. Fall back to sharing the full host -- the client then
+# contends with the arm it is measuring, so record that, never imply it.
+if [ "$_n" -ge "$HOSTCPUS" ]; then
+  : "${CLIENT_CPUSET:=0-$(( HOSTCPUS - 1 ))}"
+  CLIENT_ISOLATED=false
+else
+  : "${CLIENT_CPUSET:=${_n}-$(( HOSTCPUS - 1 ))}"
+  CLIENT_ISOLATED=true
+fi
+export ARM_CPUS BENCH_CPUSET CLIENT_CPUSET CLIENT_ISOLATED
 export BENCH_TIMEOUT_S="${BENCH_TIMEOUT_S:-3600}"
 # Memory is measured, not capped -- see docker-compose.yml. A 10g cap would
 # have OOM-killed RocketRide (peak 10,536 MB) and capping per container gave
 # the two-container LG arm twice RocketRide's ceiling.
 export CORPUS
 export RR_DUP_PATCH="${RR_DUP_PATCH:-1}"
+export CENSUS_EMPTY_POLICY="${CENSUS_EMPTY_POLICY:-fail}"
 export LG_EXTRACTOR="${LG_EXTRACTOR:-tika}"
 LG=bench-langgraph; RR=bench-rocketride
 REL="$(basename "$RUN")"          # results/ is mounted at /results in the client
@@ -87,6 +98,8 @@ have=$(find "$CORPUS" -name '*.pdf' | wc -l | tr -d ' ')
   echo "warm_docs=$WARM"; echo "arm_cpus=$ARM_CPUS"
   echo "arm_mem=UNCAPPED (measured, not enforced)"
   echo "bench_cpuset=$BENCH_CPUSET"; echo "client_cpuset=$CLIENT_CPUSET"
+  echo "client_isolated=$CLIENT_ISOLATED"
+  echo "census_empty_policy=${CENSUS_EMPTY_POLICY:-fail}"
   echo "timeout_s=$BENCH_TIMEOUT_S"; echo "client=containerized (bench-client)"
   echo "lg_extractor=$LG_EXTRACTOR"
   echo "rr_threads=${RR_THREADS:-NONE (engine default)}"

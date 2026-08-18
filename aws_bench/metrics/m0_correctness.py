@@ -52,11 +52,28 @@ def failure_bucket(r: Dict) -> str:
 
 def census(rows: List[Dict], offered: int,
            expected_docs: Optional[Set[str]] = None,
-           expected_empty: Set[str] = frozenset()) -> Dict[str, Any]:
+           expected_empty: Set[str] = frozenset(),
+           empty_policy: str = "fail") -> Dict[str, Any]:
     """Loss detection. Every offered doc must come back as exactly one
     record, and every failure must be explicit and expected. With
     expected_docs (the corpus manifest) silent drops are named, not just
-    counted."""
+    counted.
+
+    empty_policy governs ONLY explicit empty-extraction outcomes (a parser
+    that handled the file and found no text):
+
+      "fail"   -- the default. Only docs NAMED in expected_empty may come
+                  back empty; anything else is a defect.
+      "report" -- any empty extraction is named and counted but does not
+                  fail the gate. For heterogeneous corpora where scanned,
+                  text-free PDFs are a property of the input.
+
+    The hatch never widens beyond that. LOST, DUPLICATE, MISSING and
+    UNEXPECTED docs remain fatal under either policy, as do timeouts and
+    transport errors — including on a doc named in expected_empty.
+    """
+    if empty_policy not in ("fail", "report"):
+        raise ValueError(f"empty_policy must be 'fail' or 'report', got {empty_policy!r}")
     docs = [r["doc"] for r in rows]
     counts = Counter(docs)
     duplicates = sorted(d for d, n in counts.items() if n > 1)
@@ -73,8 +90,13 @@ def census(rows: List[Dict], offered: int,
             if len(examples[bucket]) < MAX_ERROR_EXAMPLES:
                 examples[bucket].append(msg)
 
+    # Docs the parser handled but found no text in. Under "report" every one
+    # of them is tolerated; under "fail" only the named allowlist is.
+    empty_docs = sorted(d for reason, ds in by_reason.items()
+                        if reason in EMPTY_FAIL_REASONS for d in ds)
+    tolerated = set(empty_docs) if empty_policy == "report" else set(expected_empty)
     unexpected = [d for reason, ds in by_reason.items() for d in ds
-                  if not (reason in EMPTY_FAIL_REASONS and d in expected_empty)]
+                  if not (reason in EMPTY_FAIL_REASONS and d in tolerated)]
 
     missing = unexpected_docs = None
     if expected_docs is not None:
@@ -95,6 +117,11 @@ def census(rows: List[Dict], offered: int,
         "failure_examples": examples,
         "unexpected_failures": len(unexpected),
         "unexpected_failure_docs": sorted(unexpected),
+        # Named regardless of policy: under "report" these are the docs the
+        # gate tolerated, and a reader must be able to see exactly which.
+        "empty_policy": empty_policy,
+        "empty_extraction_count": len(empty_docs),
+        "empty_extraction_docs": empty_docs,
         "PASS": (len(rows) == offered and not duplicates and not unexpected
                  and not missing and not unexpected_docs),
     }
