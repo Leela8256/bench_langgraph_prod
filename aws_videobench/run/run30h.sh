@@ -21,6 +21,25 @@ echo "== [1/5] corpus: ami30h set -> $CORPUS_DIR"
 MEETING_LIST=corpus/sets/ami30h.txt bash corpus/fetch_ami.sh "$N" "$CORPUS_DIR"
 echo "   $(find "$CORPUS_DIR" -name '*.avi' | wc -l | tr -d ' ') videos, $(du -sh "$CORPUS_DIR" | cut -f1)"
 
+# The raw download cache is dead weight once the corpus is muxed and verified,
+# and the 2026-08-19 run died on ENOSPC because of it: the ENGINE stores its
+# own copy of every uploaded video (+ decode temp) on this same volume, which
+# needs roughly another corpus-worth of space. Cache is re-downloadable;
+# failed runs are not. Keep it only with KEEP_CACHE=1.
+if [ "${KEEP_CACHE:-0}" != "1" ] && [ -d "$HOME/ami_cache" ]; then
+  echo "   freeing raw cache: $(du -sh "$HOME/ami_cache" | cut -f1) (KEEP_CACHE=1 to keep)"
+  rm -rf "$HOME/ami_cache"
+fi
+
+# Fail BEFORE the engine does: corpus-size + temp + results must fit.
+NEED_GB=$(( $(du -sm "$CORPUS_DIR" | cut -f1) / 1024 + 6 ))
+FREE_GB=$(df -Pm / | awk 'NR==2{print int($4/1024)}')
+if [ "$FREE_GB" -lt "$NEED_GB" ]; then
+  echo "FATAL: ${FREE_GB}G free, need ~${NEED_GB}G (engine stores uploads on this volume)" >&2
+  exit 1
+fi
+echo "   disk ok: ${FREE_GB}G free, ~${NEED_GB}G needed"
+
 echo "== [2/5] build + engine up"
 docker compose build
 docker compose up -d rocketride
