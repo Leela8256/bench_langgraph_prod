@@ -33,10 +33,20 @@ ssm_online() {
 
 # One-shot over the default shell document: pipe command + exit into stdin.
 # Remote exit code is echoed as __RC=<n> and re-raised locally.
+#
+# `script -q /dev/null` allocates a PSEUDO-TTY for the session plugin. Since
+# the box's SSM agent auto-updated to 3.3.4793.0 (2026-08-19), no-TTY piped
+# sessions die instantly with "Cannot perform start session: EOF" — and each
+# one ALSO stays "Connected" server-side, so 25 of them hit the per-instance
+# session cap and lock the box out entirely (terminate-session is denied to
+# this role; only a stop/start or the idle timeout clears them). Verified
+# same-day: the identical piped command works under a pty. macOS `script`
+# syntax; tr strips the \r the pty adds.
 pipe_run() {
   local cmd="$1" out rc
-  out=$({ sleep 2; printf '%s\n' "$cmd" 'echo "__RC=$?"' 'exit'; } \
-        | "${A[@]}" ssm start-session --target "$INSTANCE" 2>&1) || true
+  out=$({ sleep 3; printf '%s\n' "$cmd" 'echo "__RC=$?"' 'exit'; } \
+        | script -q /dev/null "${A[@]}" ssm start-session --target "$INSTANCE" 2>&1 \
+        | tr -d '\r') || true
   printf '%s\n' "$out"
   rc=$(printf '%s\n' "$out" | grep -o '__RC=[0-9]*' | tail -1 | cut -d= -f2)
   [ -n "${rc:-}" ] || die "no exit marker in session output — session may not have opened"
