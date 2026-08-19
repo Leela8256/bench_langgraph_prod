@@ -58,6 +58,7 @@ services:
       - "${CORPUS:-./corpus}:/corpus:ro"
       - ./results:/results
       - ./pipe:/pipe:ro
+      - ./bench:/bench:ro     # batch driver mounted, not baked — no rebuild to iterate
 
 volumes:
   rr-model-cache:
