@@ -147,6 +147,11 @@ wait_healthy() {  # $1 container, $2 service
 }
 
 # ------------------------------------------------------------------ LG arm
+# SKIP_LG=1 runs the RocketRide arm alone — for engine-tuning probes (thread
+# sweeps, scheduler experiments) where a comparison arm adds nothing. The
+# report handles the absent arm; the run is a PROBE, not a comparison, and
+# cross-arm/determinism verdicts will reflect that.
+if [ "${SKIP_LG:-0}" != "1" ]; then
 say "=== LangGraph — $REPS x $N docs, mode=$LG_MODE ==="
 [ "$LG_EXTRACTOR" = tika ] && docker compose up -d tika
 docker compose up -d langgraph
@@ -176,6 +181,9 @@ for r in $(seq 1 "$REPS"); do
 done
 docker compose stop langgraph tika   # tika must NOT idle on the
                                      # arm cores during RR
+else
+  say "SKIP_LG=1 — LangGraph arm skipped (RocketRide-only probe run)"
+fi
 
 # ------------------------------------------------------------------ RR arm
 say "=== RocketRide — $REPS x $N docs, mode=$RR_MODE ==="
