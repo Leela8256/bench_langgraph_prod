@@ -1,0 +1,63 @@
+# aws_videobench — RocketRide video pipeline, SMOKE configuration.
+#
+# This compose file is for the smoke test, NOT for measurement:
+#   - no cpuset envelope (nothing is being compared yet)
+#   - intra-op threads deliberately NOT pinned to 1, so a 21-minute meeting
+#     transcribes at tolerable speed on a cold engine
+# When this grows into a matched benchmark, copy the envelope discipline from
+# aws_bench/docker-compose.yml verbatim: shared BENCH_CPUSET, OMP_NUM_THREADS=1
+# on both arms, memory uncapped-but-measured, one arm at a time.
+
+services:
+  rocketride:
+    build:
+      context: ./engine
+      dockerfile: Dockerfile
+    image: videobench-rocketride:3.3.1
+    platform: linux/amd64
+    container_name: videobench-rocketride
+    environment:
+      ROCKETRIDE_URI: ws://127.0.0.1:5565/task/service
+      ROCKETRIDE_APIKEY: local-dev
+      RR_HOST: "0.0.0.0"           # MUST be explicit: without it the engine
+                                   # binds an interface unreachable from the host
+    ports: ["5565:5565"]
+    volumes:
+      # Persist pip/HF/whisper/rf-detr downloads across container recreations.
+      # First video pipeline start on a FRESH volume pulls several GB (torch
+      # tree, whisper base, rf-detr-base.pth); with this volume that price is
+      # paid once per box, not once per `compose up`.
+      - rr-model-cache:/root/.cache
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import socket,sys; s=socket.socket(); s.settimeout(3); sys.exit(s.connect_ex(('127.0.0.1',5565)))"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  smoke:
+    # The CLIENT, in its own container: same discipline as the PDF bench —
+    # client CPU/RSS must not land in the engine's cgroup, and the video
+    # reaches the engine over a network hop like every future benchmark doc.
+    build:
+      context: ./smoke
+      dockerfile: smoke.Dockerfile
+    image: videobench-smoke:latest
+    platform: linux/amd64
+    container_name: videobench-smoke
+    profiles: ["client"]          # never started by `up`; used via `compose run`
+    environment:
+      ROCKETRIDE_URI: "ws://rocketride:5565/task/service"
+      ROCKETRIDE_APIKEY: local-dev
+      BENCH_PIPE: /pipe/benchmark_video.pipe
+      # Generous: rep 1 of a cold engine includes pip-installing the whisper +
+      # rfdetr stacks and downloading model weights before any real work.
+      BENCH_TIMEOUT_S: "${BENCH_TIMEOUT_S:-5400}"
+    volumes:
+      - "${CORPUS:-./corpus}:/corpus:ro"
+      - ./results:/results
+      - ./pipe:/pipe:ro
+
+volumes:
+  rr-model-cache:
