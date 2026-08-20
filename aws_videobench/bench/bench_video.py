@@ -195,11 +195,24 @@ async def main():
         except Exception:
             pass
 
+    # RR_THREADS unset -> the engine's own default pool (what an untuned
+    # deployment gets; every video run before 2026-08-20 ran this way).
+    # Set -> that pool size is requested via use(threads=N). Same caveat as
+    # the PDF bench: threads REQUESTED is not threads activated — the real
+    # pool is not observable from the client; effective cores come from the
+    # cgroup sampler.
+    rr_threads = os.environ.get("RR_THREADS")
+    threads = int(rr_threads) if rr_threads else None
+
     client = RocketRideClient(uri=URI, auth=APIKEY, on_event=on_event)
     await client.connect()
-    used = await client.use(filepath=str(pipe_path), use_existing=True, ttl=28800)
+    use_kwargs = dict(filepath=str(pipe_path), use_existing=True, ttl=28800)
+    if threads:
+        use_kwargs["threads"] = threads
+    used = await client.use(**use_kwargs)
     token = used["token"]
-    print(f"[rrv] pipeline up, token={token}", flush=True)
+    print(f"[rrv] pipeline up, token={token}, threads_requested="
+          f"{threads if threads else 'NONE (engine default)'}", flush=True)
 
     try:
         await client.set_events(token, ["apaevt_status_upload"])
@@ -303,6 +316,7 @@ async def main():
             "realtime_factor": round(measured_audio_s / span, 2) if span else None,
             "total_chunks": chunks,
             "timeout_s": TIMEOUT_S,
+            "threads_requested": threads,
             "warm_docs": len(warm_set), "warm_s": warm_s,
             "event_actions_seen": dict(event_actions),
             "mono_offset_ns": mono_offset_ns,

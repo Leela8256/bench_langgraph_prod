@@ -57,6 +57,10 @@ services:
       # Generous: rep 1 of a cold engine includes pip-installing the whisper +
       # rfdetr stacks and downloading model weights before any real work.
       BENCH_TIMEOUT_S: "${BENCH_TIMEOUT_S:-5400}"
+      # Engine worker-pool request, passed to use(threads=N). Unset = engine
+      # default pool (how every video run before 2026-08-20 ran). Requested
+      # is not activated — effective cores come from the cgroup sampler.
+      RR_THREADS: "${RR_THREADS:-}"
     volumes:
       - "${CORPUS:-./corpus}:/corpus:ro"
       - ./results:/results
