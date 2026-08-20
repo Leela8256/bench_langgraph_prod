@@ -1,0 +1,96 @@
+{
+  "components": [
+    {
+      "id": "webhook_1",
+      "provider": "webhook",
+      "config": {
+        "hideForm": true,
+        "type": "webhook",
+        "mode": "Source",
+        "parameters": {}
+      }
+    },
+    {
+      "id": "frame_grabber_1",
+      "provider": "frame_grabber",
+      "config": {
+        "profile": "interval",
+        "interval": {
+          "interval": 15,
+          "start_time": 0,
+          "duration": 0
+        }
+      },
+      "input": [
+        {
+          "lane": "video",
+          "from": "webhook_1"
+        }
+      ]
+    },
+    {
+      "id": "detect_1",
+      "provider": "detect",
+      "config": {
+        "profile": "rfdetr",
+        "threshold": 0.3
+      },
+      "input": [
+        {
+          "lane": "image",
+          "from": "frame_grabber_1"
+        }
+      ]
+    },
+    {
+      "id": "preprocessor_1",
+      "provider": "preprocessor_langchain",
+      "config": {
+        "profile": "default",
+        "default": {
+          "splitter": "RecursiveCharacterTextSplitter",
+          "mode": "strlen"
+        }
+      },
+      "input": [
+        {
+          "lane": "text",
+          "from": "detect_1"
+        }
+      ]
+    },
+    {
+      "id": "embedding_1",
+      "provider": "embedding_transformer",
+      "config": {
+        "profile": "miniLM"
+      },
+      "input": [
+        {
+          "lane": "documents",
+          "from": "preprocessor_1"
+        }
+      ]
+    },
+    {
+      "id": "response_1",
+      "provider": "response_documents",
+      "config": {
+        "laneName": "documents"
+      },
+      "input": [
+        {
+          "lane": "documents",
+          "from": "embedding_1"
+        }
+      ]
+    }
+  ],
+  "project_id": "8b5e70ec-b4cb-4146-9f26-f314ca07442a",
+  "viewport": {
+    "x": 0,
+    "y": 0,
+    "zoom": 1
+  },
+  "version": 1
+}
