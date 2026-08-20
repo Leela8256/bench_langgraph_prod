@@ -1,0 +1,57 @@
+"""Object detection. Pure computation — no fastapi, no langgraph imports.
+
+Mirrors RocketRide's detect node (rfdetr profile): the RFDETRBase model from
+the `rfdetr` package — the exact backend the engine's
+ai/common/models/vision/detection.py prefers — at threshold 0.3, emitting
+one JSON line per frame in the engine's observed output shape:
+
+    [{"label": ..., "score": ..., "box": {"x1","y1","x2","y2"},
+      "centroid": {"x","y"}}, ...]
+
+Serialization is python json.dumps defaults, which is byte-what the engine
+emits (verified against the ES2016d capture). Model is a lazy singleton:
+loading RF-DETR takes seconds and must happen once, not per frame.
+"""
+
+import json
+import threading
+
+THRESHOLD = 0.3
+_lock = threading.Lock()
+_model = None
+_classes = None
+
+
+def _load():
+    global _model, _classes
+    with _lock:
+        if _model is None:
+            from rfdetr import RFDETRBase
+            try:  # rfdetr >= 1.9 (dict keyed by class id)
+                from rfdetr.assets.coco_classes import COCO_CLASSES
+            except ImportError:  # older releases
+                from rfdetr.util.coco_classes import COCO_CLASSES
+            _model = RFDETRBase()
+            _classes = COCO_CLASSES
+    return _model, _classes
+
+
+def detect_frame(image) -> str:
+    """One frame -> one JSON line of detections (possibly '[]')."""
+    model, classes = _load()
+    det = model.predict(image, threshold=THRESHOLD)
+    out = []
+    for (x1, y1, x2, y2), score, cls in zip(det.xyxy, det.confidence, det.class_id):
+        out.append({
+            "label": classes[int(cls)],
+            "score": float(score),
+            "box": {"x1": float(x1), "y1": float(y1),
+                    "x2": float(x2), "y2": float(y2)},
+            "centroid": {"x": (float(x1) + float(x2)) / 2,
+                         "y": (float(y1) + float(y2)) / 2},
+        })
+    return json.dumps(out)
+
+
+def detect_frames(frames) -> list[str]:
+    return [detect_frame(f) for f in frames]
