@@ -166,6 +166,12 @@ async def main():
 
     event_times: dict = {}
     event_actions: collections.Counter = collections.Counter()
+    # Live per-video progress, flushed line-by-line as terminal events arrive,
+    # so a watcher (and the S3 sync loop) sees completions DURING a blast
+    # instead of one blob at the end. Append-only; the post-run per_doc.jsonl
+    # stays the authoritative record.
+    progress_fh = open(out / "progress.jsonl", "a", buffering=1)
+    run_t0 = time.perf_counter_ns()
 
     async def on_event(ev):
         try:
@@ -177,7 +183,15 @@ async def main():
             if act in ("complete", "error"):
                 fp = b.get("filepath")
                 if fp:
-                    event_times.setdefault(Path(fp).name, time.perf_counter_ns())
+                    name = Path(fp).name
+                    event_times.setdefault(name, time.perf_counter_ns())
+                    done = len(event_times)
+                    t_rel = (time.perf_counter_ns() - run_t0) / 1e9
+                    progress_fh.write(json.dumps(
+                        {"doc": name, "action": act,
+                         "t_rel_s": round(t_rel, 1), "n_done": done}) + "\n")
+                    print(f"[rrv] progress: {name} {act} "
+                          f"({done} terminal events, t+{t_rel:.0f}s)", flush=True)
         except Exception:
             pass
 

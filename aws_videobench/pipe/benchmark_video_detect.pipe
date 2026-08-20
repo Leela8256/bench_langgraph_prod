@@ -3,16 +3,26 @@
     {
       "id": "webhook_1",
       "provider": "webhook",
+      "name": "Webhook",
       "config": {
         "hideForm": true,
         "type": "webhook",
         "mode": "Source",
         "parameters": {}
+      },
+      "ui": {
+        "position": {
+          "x": -530,
+          "y": -20
+        },
+        "nodeType": "default",
+        "formDataValid": true
       }
     },
     {
       "id": "frame_grabber_1",
       "provider": "frame_grabber",
+      "name": "Frame Grabber",
       "config": {
         "profile": "interval",
         "interval": {
@@ -20,6 +30,14 @@
           "start_time": 0,
           "duration": 0
         }
+      },
+      "ui": {
+        "position": {
+          "x": -270,
+          "y": 110
+        },
+        "nodeType": "default",
+        "formDataValid": true
       },
       "input": [
         {
@@ -31,9 +49,18 @@
     {
       "id": "detect_1",
       "provider": "detect",
+      "name": "Object Detection",
       "config": {
         "profile": "rfdetr",
         "threshold": 0.3
+      },
+      "ui": {
+        "position": {
+          "x": -190,
+          "y": 290
+        },
+        "nodeType": "default",
+        "formDataValid": true
       },
       "input": [
         {
@@ -45,12 +72,21 @@
     {
       "id": "preprocessor_1",
       "provider": "preprocessor_langchain",
+      "name": "General Text",
       "config": {
         "profile": "default",
         "default": {
           "splitter": "RecursiveCharacterTextSplitter",
           "mode": "strlen"
         }
+      },
+      "ui": {
+        "position": {
+          "x": -60,
+          "y": -100
+        },
+        "nodeType": "default",
+        "formDataValid": true
       },
       "input": [
         {
@@ -62,8 +98,20 @@
     {
       "id": "embedding_1",
       "provider": "embedding_transformer",
+      "name": "Transformer",
       "config": {
-        "profile": "miniLM"
+        "profile": "miniLM",
+        "parameters": {
+          "google": {}
+        }
+      },
+      "ui": {
+        "position": {
+          "x": 50,
+          "y": 80
+        },
+        "nodeType": "default",
+        "formDataValid": true
       },
       "input": [
         {
@@ -75,8 +123,17 @@
     {
       "id": "response_1",
       "provider": "response_documents",
+      "name": "Return Documents",
       "config": {
         "laneName": "documents"
+      },
+      "ui": {
+        "position": {
+          "x": 190,
+          "y": -90
+        },
+        "nodeType": "default",
+        "formDataValid": true
       },
       "input": [
         {
@@ -87,10 +144,12 @@
     }
   ],
   "project_id": "8b5e70ec-b4cb-4146-9f26-f314ca07442a",
-  "viewport": {
-    "x": 0,
-    "y": 0,
-    "zoom": 1
-  },
-  "version": 1
+  "version": 1,
+  "isLocked": false,
+  "snapToGrid": true,
+  "snapGridSize": [
+    10,
+    10
+  ],
+  "docRevision": 9
 }

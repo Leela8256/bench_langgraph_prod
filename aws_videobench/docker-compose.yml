@@ -50,7 +50,10 @@ services:
     environment:
       ROCKETRIDE_URI: "ws://rocketride:5565/task/service"
       ROCKETRIDE_APIKEY: local-dev
-      BENCH_PIPE: /pipe/benchmark_video.pipe
+      # Which pipe contract this run executes — default is the dual-lane
+      # (audio+vision) pipe; run scripts override for variants like
+      # benchmark_video_detect.pipe.
+      BENCH_PIPE: "${BENCH_PIPE:-/pipe/benchmark_video.pipe}"
       # Generous: rep 1 of a cold engine includes pip-installing the whisper +
       # rfdetr stacks and downloading model weights before any real work.
       BENCH_TIMEOUT_S: "${BENCH_TIMEOUT_S:-5400}"
