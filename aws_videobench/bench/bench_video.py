@@ -74,6 +74,14 @@ def fill_from_docs(rec, docs):
     texts = [d.get("page_content", "") for d in docs]
     rec["n_chunks"] = len(docs)
     rec["total_chars"] = sum(len(t) for t in texts)
+    # Frame/detection counts for the V0 gates (frame_law, detection_ratio).
+    # Concatenating chunks reassembles the full text exactly (no overlap,
+    # verified), though boundary newlines are dropped by the splitter — so
+    # frames are counted by their array-start patterns, which concatenation
+    # restores even when a split fell mid-line or between '[' and '{'.
+    full = "".join(texts)
+    rec["n_frames_est"] = full.count("[{") + full.count("[]")
+    rec["n_detections"] = full.count('"label"')
     rec["chunk_sha256"] = [hashlib.sha256(t.encode("utf-8")).hexdigest()
                            for t in texts]
     rec["vector_dim"] = EMBED_DIM if okv else None

@@ -1,66 +1,80 @@
-# aws_videobench — RocketRide video pipeline on the AWS box
+# aws_videobench — the video benchmark (RocketRide vs LangGraph)
 
-Video sibling of `aws_bench/` (the PDF benchmark). Same engine, same two
-3.3.1 patches, same client-in-its-own-container discipline. Currently at the
-**smoke stage**: one AMI meeting video through the pipe, twice, with explicit
-verdicts on the risks the video pipe carries. Not a benchmark yet — no
-envelope, no LangGraph arm, no metrics gates.
+Self-contained: both arms, the shared pipeline contracts, the corpus
+tooling, the drivers, and the canonical metric/gate logic all live here.
+Nothing outside this folder is required to benchmark the video workload
+(the only external piece is `aws_bench/local/box.sh` for laptop-side EC2
+control).
 
 ```
 aws_videobench/
-  pipe/benchmark_video.pipe   THE pipeline contract (canonical copy — moved
-                              out of aws_bench so exactly one copy exists)
-  corpus/fetch_ami.sh         AMI corpus: Closeup1.avi + Mix-Headset.wav
-                              muxed per meeting (the mirror's .avi has NO
-                              audio track), manifest + SHA256SUMS
-  engine/                     RocketRide 3.3.1, SHA-pinned, boot fix +
-                              BUG_CHUNK_DUPLICATION patch (same as PDF arm)
-  smoke/smoke_video.py        1 video x N reps -> R1..R6 verdicts
-  run/smoke_run.sh            fetch -> build -> up -> smoke -> S3
-  results/                    run output (git-ignored)
+  DATA_FLOW_PLAN.md          the architecture, end to end — READ FIRST
+  METRICS.md                 the V0–V5 metric specification
+  docker-compose.yml         both arms + the client, one file
+  pipe/
+    benchmark_video_detect.pipe   THE benchmark contract (frames 15s →
+                                  RF-DETR 0.3 → split 4000 → miniLM 384)
+    benchmark_video.pipe          dual-lane variant (adds Whisper — carries
+                                  the known determinism caveat)
+  arms/
+    rocketride/              engine 3.3.1, SHA-pinned + boot fix +
+                             duplication patch ("3.3.1 with the documented
+                             duplication correction", never "stock")
+    langgraph/               FastAPI + StateGraph mirror of the pipe,
+                             stage-for-stage (own Dockerfile + local smoke)
+  corpus/
+    fetch_ami.sh             mirror → mux → run-ready .avi (+manifest, SHAs)
+    sets/ami_full.txt        all 170 usable AMI meetings (99.5 h)
+    sets/ami30h.txt          the 62-meeting sizing set
+  bench/                     canonical logic — nothing computed elsewhere
+    bench_video.py           RocketRide driver (blast / seq / c<N>)
+    lg_driver.py             LangGraph driver (seq / c<N>) — SAME record schema
+    capture_one.py           full-output capture for verification passes
+    report.py                gates first, numbers second, fail-closed
+    metrics/v0_gates.py      census, structure, frame_law, self_duplication,
+                             determinism, cross-arm equivalence bands
+    metrics/v_metrics.py     V1 throughput, V2 latency, V3 efficiency,
+                             V4 resources, V5 cost
+  run/                       on-box entrypoints (each self-documenting)
+    stage_corpus.sh          one-time: full corpus → S3 (delete-as-you-go)
+    run_waves.sh             the campaign runner (S3 → RAM → engine → S3)
+    run_detect.sh / run_s3test.sh / smoke_lg_box.sh / capture_one.sh / smoke_run.sh
+  smoke/                     client image + 1-video smoke driver
+  results/                   run output (git-ignored; S3 is the record)
 ```
 
-## The pipeline
+## The one rule
 
-```
-                 ┌ video ► audio_transcribe (faster-whisper base) ─ text ┐
-webhook ─ fan-out┤                                                       ├► preprocessor ► embedding(miniLM) ► response_documents
-                 └ video ► frame_grabber (15s) ─ image ► detect (RF-DETR) ─ text ┘
-```
+**Only the framework may vary between arms.** Same corpus, same order,
+same envelope, same reps, same mode, same deadline, same client. One arm
+at a time, one engine per arm. Provenance or it didn't happen.
 
-All components run locally in the engine (whisper via faster-whisper/PyAV,
-frame decode via the engine's own AVI reader + imageio_ffmpeg, RF-DETR via
-the `rfdetr` package). Nothing calls an external API. The tail (preprocessor,
-miniLM 384-dim, response_documents) is byte-identical to the PDF pipe, so the
-structure gate and `cpu_s_per_chunk` carry over.
-
-## Run the smoke (on the box)
+## Run it (on the box)
 
 ```bash
-cd ~/bench_langgraph_prod && git pull
-cd aws_videobench
-nohup bash run/smoke_run.sh > ~/logs/videosmoke.log 2>&1 < /dev/null &
+cd ~/bench_langgraph_prod/aws_videobench
+bash run/stage_corpus.sh                  # once: 170 meetings → S3 (~1.5 h)
+TOTAL=170 W=85 CORPUS_MODE=s3 \
+  S3_CORPUS=s3://rocketride-benchmark-data/leela/corpus/ami_full \
+  nohup bash run/run_waves.sh > ~/logs/waves.log 2>&1 < /dev/null &
 ```
 
-~100 MB AMI download, then rep 1 includes the engine pip-installing the
-whisper + rfdetr stacks and pulling model weights into the `rr-model-cache`
-volume (one-time per box, several GB). Rep 2 is the honest single-doc time.
+LangGraph runs through the same compose (`docker compose up -d langgraph`,
+then `bench/lg_driver.py` from the smoke container) — never at the same
+time as the RocketRide arm in a measured run.
 
-## What the smoke decides (R1–R6)
+## Read the results
 
-| verdict | meaning if not PASS |
-|---|---|
-| R1 lane routing | webhook did not put `.avi` on the `video` lane → insert `parse` (tags→video) into the pipe |
-| R2 audio demux+ASR | faster-whisper can't read PCM-in-AVI → re-mux corpus to MKV |
-| R3 frame lane (WARN) | no detection-like chunks visible → check `docs_rep*.json` metadata for lane provenance before concluding |
-| R4 structure | 384-dim/finite/norm gate broken → engine issue, stop |
-| R5 content determinism | whisper temperature-fallback sampled → must pin/mitigate before any benchmark rep counts |
-| R6 order determinism (WARN) | two-lane merge interleaves → the benchmark determinism gate needs sorted chunk-hash comparison |
+Every metric is re-derivable from raw records forever:
 
-## Toward the real benchmark
+```bash
+aws s3 cp --recursive s3://rocketride-benchmark-data/leela/videobench/<run>/ ./run --profile leela
+python3 bench/report.py ./run                       # one run: gates + V1–V5
+python3 bench/report.py ./rep1 ./rep2 ./rep3        # reps: adds determinism
+python3 bench/report.py --arms ./rr1,./rr2 ./lg1,./lg2   # cross-arm gates
+```
 
-Sequence after a green smoke: N=20 RocketRide-only run for corpus sizing →
-LangGraph arm (faster-whisper + ffmpeg/OpenCV + `rfdetr` + same splitter +
-same miniLM) → matched runs under `aws_bench`'s envelope rules (shared
-cpuset, OMP=1, one deadline, client on its own cores, provenance or it
-didn't happen).
+`report.py` exits non-zero on any hard gate failure; single-rep runs are
+labeled sizing evidence and cannot pass determinism. See METRICS.md for
+what each gate and number means, and DATA_FLOW_PLAN.md §8 for the traps
+that have already bitten once.

@@ -11,7 +11,7 @@
 services:
   rocketride:
     build:
-      context: ./engine
+      context: ./arms/rocketride
       dockerfile: Dockerfile
     image: videobench-rocketride:3.3.1
     platform: linux/amd64
@@ -35,6 +35,27 @@ services:
       timeout: 5s
       retries: 30
       start_period: 30s
+
+  langgraph:
+    # The LangGraph arm — same service the local and box smokes verified.
+    # Never runs at the same time as rocketride in a measured run (one arm
+    # at a time under the envelope).
+    build:
+      context: ./arms/langgraph
+      dockerfile: Dockerfile
+    image: videobench-langgraph:v1
+    platform: linux/amd64
+    container_name: videobench-langgraph
+    ports: ["8200:8200"]
+    volumes:
+      - rr-model-cache:/root/.cache   # shared: rfdetr + miniLM download once per box
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8200/health/ready',timeout=3).status==200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+      start_period: 60s
 
   smoke:
     # The CLIENT, in its own container: same discipline as the PDF bench —

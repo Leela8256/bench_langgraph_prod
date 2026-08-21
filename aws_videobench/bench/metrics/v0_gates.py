@@ -1,0 +1,192 @@
+"""V0 — validity gates. Fail-closed: a missing field or unproven state is a
+violation, never a default pass. A run failing any HARD gate produces no
+quotable numbers (METRICS.md).
+
+Every gate returns {"gate", "status": PASS|FAIL|WARN|SKIP, "detail"}.
+SKIP means the input lacks the field the gate needs (e.g. old records
+without n_frames_est) — the report surfaces it loudly; it is not a pass.
+"""
+
+from collections import Counter
+
+EMBED_DIM = 384
+NORM_TOL = 1e-3
+FRAME_INTERVAL_S = 15
+CHUNK_MAX_CHARS = 4096
+# Cross-arm bands (functional equivalence — byte parity deliberately not
+# required, decision 2026-08-20):
+DET_RATIO_WARN = (0.90, 1.10)
+CHUNK_RATIO_HARD = (0.4, 2.5)
+CHUNK_RATIO_WARN = (0.8, 1.25)
+
+
+def _g(gate, status, detail):
+    return {"gate": gate, "status": status, "detail": detail}
+
+
+def census(records, manifest_docs):
+    """Loss: offered == returned, attributed, unique, no unexpected failures."""
+    names = [r["doc"] for r in records]
+    problems = []
+    if len(names) != len(set(names)):
+        problems.append("duplicate records: "
+                        + str([d for d, c in Counter(names).items() if c > 1][:5]))
+    missing = sorted(set(manifest_docs) - set(names))
+    extra = sorted(set(names) - set(manifest_docs))
+    if missing:
+        problems.append(f"missing from records: {missing[:5]}{'…' if len(missing) > 5 else ''}")
+    if extra:
+        problems.append(f"not in manifest: {extra[:5]}")
+    bad_id = [r["doc"] for r in records if not r.get("identity_ok")]
+    if bad_id:
+        problems.append(f"identity_ok false: {bad_id[:5]}")
+    failed = [(r["doc"], r.get("reason")) for r in records if not r.get("ok")]
+    if failed:
+        problems.append(f"failed docs: {failed[:5]}{'…' if len(failed) > 5 else ''}")
+    return _g("census", "FAIL" if problems else "PASS",
+              "; ".join(problems) or f"{len(records)}/{len(manifest_docs)} docs, all ok")
+
+
+def structure(records):
+    """Corruption: chunks exist, vectors are 384-dim/finite/normalized,
+    hash count matches chunk count, chunk sizes inside the splitter window."""
+    problems = []
+    for r in records:
+        if not r.get("ok"):
+            continue                      # census already names failures
+        d = r["doc"]
+        if (r.get("n_chunks") or 0) < 1:
+            problems.append(f"{d}: no chunks")
+        if r.get("vector_dim") != EMBED_DIM:
+            problems.append(f"{d}: vector_dim={r.get('vector_dim')}")
+        if len(r.get("chunk_sha256") or []) != r.get("n_chunks"):
+            problems.append(f"{d}: hash count != chunk count")
+        mm = r.get("l2_norms_minmax")
+        if not mm or abs(mm[0] - 1) > NORM_TOL or abs(mm[1] - 1) > NORM_TOL:
+            problems.append(f"{d}: norms {mm}")
+        n, chars = r.get("n_chunks") or 0, r.get("total_chars") or 0
+        if n and chars / n > CHUNK_MAX_CHARS:
+            problems.append(f"{d}: mean chunk {chars / n:.0f} chars > {CHUNK_MAX_CHARS}")
+    return _g("structure", "FAIL" if problems else "PASS",
+              "; ".join(problems[:6]) or "384-dim finite normalized, counts consistent")
+
+
+def frame_law(records):
+    """Silent frame drops: frames == floor(duration/15)+1 (±1) per video."""
+    checked, problems, missing = 0, [], 0
+    for r in records:
+        if not r.get("ok"):
+            continue
+        if r.get("n_frames_est") is None or not r.get("duration_s"):
+            missing += 1
+            continue
+        checked += 1
+        expect = int(r["duration_s"] // FRAME_INTERVAL_S) + 1
+        if abs(r["n_frames_est"] - expect) > 1:
+            problems.append(f"{r['doc']}: {r['n_frames_est']} frames, expected ~{expect}")
+    if checked == 0:
+        return _g("frame_law", "SKIP",
+                  f"n_frames_est/duration_s absent on all {missing} records "
+                  "(records predate the field — rerun with current driver)")
+    status = "FAIL" if problems else ("WARN" if missing else "PASS")
+    detail = "; ".join(problems[:6]) or f"{checked} docs within ±1"
+    if missing and not problems:
+        detail += f" ({missing} records lacked the field)"
+    return _g("frame_law", status, detail)
+
+
+def self_duplication(records):
+    """The RR embedding-flush bug class: repeat_factor must be exactly 1.
+    Needs no other arm; survives engine upgrades."""
+    problems = []
+    for r in records:
+        h = r.get("chunk_sha256") or []
+        if len(h) != len(set(h)):
+            problems.append(f"{r['doc']}: {len(h) - len(set(h))} duplicate chunks")
+    return _g("self_duplication", "FAIL" if problems else "PASS",
+              "; ".join(problems[:6]) or "no duplicate chunks in any doc")
+
+
+def determinism(rep_records):
+    """Across reps ON THE SAME PLATFORM: ordered chunk hashes identical.
+    rep_records: list of {doc: record} maps, one per rep. Single rep FAILS
+    (unproven fails closed — PDF rule)."""
+    if len(rep_records) < 2:
+        return _g("determinism", "FAIL",
+                  f"{len(rep_records)} rep(s): determinism unproven, fails closed")
+    base = rep_records[0]
+    problems = []
+    compared = 0
+    for rep_i, rep in enumerate(rep_records[1:], start=2):
+        common = set(base) & set(rep)
+        for d in sorted(common):
+            compared += 1
+            if base[d].get("chunk_sha256") != rep[d].get("chunk_sha256"):
+                problems.append(f"{d}: hashes differ rep1 vs rep{rep_i}")
+    if compared == 0:
+        return _g("determinism", "FAIL", "no common docs across reps")
+    return _g("determinism", "FAIL" if problems else "PASS",
+              "; ".join(problems[:6]) or
+              f"{compared} doc-pairs byte-identical across {len(rep_records)} reps")
+
+
+def cross_arm(arm_a, arm_b, name_a="A", name_b="B"):
+    """Work equivalence between arms (functional bands, not byte parity).
+    arm_a/arm_b: {doc: record}. Returns a list of gate dicts."""
+    common = sorted(set(arm_a) & set(arm_b))
+    if not common:
+        return [_g("cross_arm", "FAIL", "no common docs between arms")]
+    out = []
+
+    fp = [d for d in common
+          if arm_a[d].get("n_frames_est") is not None
+          and arm_a[d].get("n_frames_est") != arm_b[d].get("n_frames_est")]
+    have_frames = any(arm_a[d].get("n_frames_est") is not None for d in common)
+    out.append(_g("frame_parity",
+                  "SKIP" if not have_frames else ("FAIL" if fp else "PASS"),
+                  "n_frames_est absent" if not have_frames else
+                  ("; ".join(f"{d}: {arm_a[d]['n_frames_est']} vs "
+                             f"{arm_b[d]['n_frames_est']}" for d in fp[:5])
+                   or f"{len(common)} docs, frame counts identical")))
+
+    ratios = []
+    for d in common:
+        a, b = arm_a[d].get("n_detections"), arm_b[d].get("n_detections")
+        if a and b:
+            ratios.append((d, a / b))
+    if ratios:
+        outside = [(d, r) for d, r in ratios
+                   if not DET_RATIO_WARN[0] <= r <= DET_RATIO_WARN[1]]
+        out.append(_g("detection_ratio", "WARN" if outside else "PASS",
+                      "; ".join(f"{d}: {r:.2f}" for d, r in outside[:5]) or
+                      f"{len(ratios)} docs inside {DET_RATIO_WARN}"))
+    else:
+        out.append(_g("detection_ratio", "SKIP", "n_detections absent"))
+
+    hard, warn = [], []
+    for d in common:
+        a, b = arm_a[d].get("n_chunks") or 0, arm_b[d].get("n_chunks") or 0
+        if not (a and b):
+            continue
+        r = a / b
+        if not CHUNK_RATIO_HARD[0] <= r <= CHUNK_RATIO_HARD[1]:
+            hard.append((d, r))
+        elif not CHUNK_RATIO_WARN[0] <= r <= CHUNK_RATIO_WARN[1]:
+            warn.append((d, r))
+    out.append(_g("chunk_ratio",
+                  "FAIL" if hard else ("WARN" if warn else "PASS"),
+                  ("; ".join(f"{d}: {r:.2f} OUTSIDE HARD {CHUNK_RATIO_HARD}"
+                             for d, r in hard[:5])) or
+                  ("; ".join(f"{d}: {r:.2f}" for d, r in warn[:5])) or
+                  f"{len(common)} docs inside warn band {CHUNK_RATIO_WARN}"))
+    return out
+
+
+def input_identity(arm_a, arm_b):
+    """Both arms must have eaten the same bytes."""
+    common = sorted(set(arm_a) & set(arm_b))
+    bad = [d for d in common
+           if arm_a[d].get("input_sha256") != arm_b[d].get("input_sha256")]
+    return _g("input_identity", "FAIL" if bad else "PASS",
+              f"differing inputs: {bad[:5]}" if bad else
+              f"{len(common)} docs, identical input bytes")

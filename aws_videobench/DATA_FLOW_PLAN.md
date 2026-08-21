@@ -216,9 +216,9 @@ S3-read preflight).
 | canonical corpus | `s3://rocketride-benchmark-data/leela/corpus/<set>/` (+manifest) |
 | results (live-synced) | `s3://rocketride-benchmark-data/leela/videobench/<run>-<stamp>/` |
 | pipe contract | `aws_videobench/pipe/benchmark_video_detect.pipe` |
-| RR engine image | `aws_videobench/engine/Dockerfile` — 3.3.1 SHA-pinned + boot fix + duplication patch; describe as "3.3.1 with the documented duplication correction", never stock |
+| RR engine image | `aws_videobench/arms/rocketride/Dockerfile` — 3.3.1 SHA-pinned + boot fix + duplication patch; describe as "3.3.1 with the documented duplication correction", never stock |
 | LG arm | `aws_videobench/arms/langgraph/` (service + Dockerfile) |
-| drivers | `aws_videobench/bench/bench_video.py`, `capture_one.py` |
+| drivers | `aws_videobench/bench/bench_video.py` (RR), `bench/lg_driver.py` (LG — same record schema), `capture_one.py` |
 | run scripts | `aws_videobench/run/*.sh` — each is self-documenting |
 | box control (laptop) | `aws_bench/local/box.sh` — start/stop/run/launch/tail |
 | model caches | docker volume `rr-model-cache` (shared by both arms' containers) — keep it; it is why nothing re-downloads |
@@ -254,9 +254,7 @@ S3-read preflight).
 |---|---|
 | extend fetch_ami.sh meeting list to EN/IB/IN (135 → 170) | small |
 | stage full corpus to S3 (§2), verify, delete EBS copy | one command + ~2 h mirror time |
-| LG bench driver emitting the per_doc.jsonl record schema | medium |
 | envelope wiring for video (§6) — port from aws_bench | medium |
-| per-video detection counts in driver records (V0 gate) | one line |
 
 ## 10. Teammate quickstart
 

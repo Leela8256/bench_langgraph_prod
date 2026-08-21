@@ -1,0 +1,184 @@
+"""LangGraph VIDEO driver — writes the SAME per_doc.jsonl schema as
+bench_video.py so bench/report.py treats both arms identically.
+
+LangGraph is an HTTP service, so its native ingestion is per-video
+requests; modes are seq and c<N> (there is no batch API to blast — that
+asymmetry is the same one the PDF bench documents for native modes).
+
+  python3 lg_driver.py <corpus_dir> <out_dir> <n_docs> [mode] [warm_docs]
+"""
+
+import asyncio
+import hashlib
+import json
+import os
+import sys
+import time
+from pathlib import Path
+
+import requests
+
+BASE = os.environ.get("LG_URL", "http://langgraph:8200")
+TIMEOUT_S = int(os.environ.get("BENCH_TIMEOUT_S", "21600"))
+EMBED_DIM = 384
+ARM = "langgraph-video-detect-v1"
+
+
+def base_record(video, durations):
+    return {"doc": video.name, "arm": ARM, "ok": False,
+            "input_sha256": hashlib.sha256(video.read_bytes()).hexdigest(),
+            "size_bytes": video.stat().st_size,
+            "duration_s": durations.get(video.name)}
+
+
+def fill_from_response(rec, out):
+    docs = out.get("documents", [])
+    texts = [d.get("page_content", "") for d in docs]
+    okv = bool(docs) and all(
+        len(d.get("embedding") or []) == EMBED_DIM and
+        all(x == x and abs(x) != float("inf") for x in d["embedding"])
+        for d in docs)
+    rec["n_chunks"] = len(docs)
+    rec["total_chars"] = sum(len(t) for t in texts)
+    full = "".join(texts)
+    rec["n_frames_est"] = full.count("[{") + full.count("[]")
+    rec["n_detections"] = full.count('"label"')
+    rec["chunk_sha256"] = [hashlib.sha256(t.encode("utf-8")).hexdigest()
+                           for t in texts]
+    rec["vector_dim"] = EMBED_DIM if okv else None
+    norms = [sum(x * x for x in (d.get("embedding") or [])) ** 0.5 for d in docs]
+    rec["l2_norms_minmax"] = ([round(min(norms), 6), round(max(norms), 6)]
+                              if norms else None)
+    rec["lg_timings"] = out.get("timings")     # per-node decomposition (V4)
+    rec["lg_n_frames_reported"] = out.get("n_frames")
+    return okv
+
+
+def process_one(video, durations):
+    rec = base_record(video, durations)
+    rec["submit_ns"] = time.perf_counter_ns()
+    try:
+        with open(video, "rb") as fh:
+            r = requests.post(f"{BASE}/process",
+                              files={"file": (video.name, fh)},
+                              timeout=TIMEOUT_S)
+        rec["completion_ns"] = time.perf_counter_ns()
+        rec["timing_source"] = "client-observed HTTP response"
+        if r.status_code != 200:
+            rec["reason"] = "http_error"
+            rec["error"] = f"HTTP {r.status_code}: {r.text[:200]}"
+            rec["identity_ok"] = False
+            return rec
+        out = r.json()
+        rec["identity_ok"] = out.get("filename") == video.name
+        okv = fill_from_response(rec, out)
+        rec["ok"] = bool(okv and rec["identity_ok"])
+        rec["reason"] = ("completed" if rec["ok"] else
+                         "no_documents" if not out.get("documents") else
+                         "completion_proof_missing")
+    except requests.Timeout:
+        rec["completion_ns"] = time.perf_counter_ns()
+        rec["reason"] = "timeout"
+    except Exception as exc:
+        rec["completion_ns"] = time.perf_counter_ns()
+        rec["reason"] = "transport_error"
+        rec["error"] = f"{type(exc).__name__}: {exc}"[:250]
+    return rec
+
+
+async def main():
+    corpus_dir, out, n = Path(sys.argv[1]), Path(sys.argv[2]), int(sys.argv[3])
+    mode = sys.argv[4] if len(sys.argv) > 4 else "seq"
+    warm_docs = int(sys.argv[5]) if len(sys.argv) > 5 else 0
+
+    all_videos = sorted(corpus_dir.glob("*.avi"))
+    corpus = all_videos[:n]
+    if not corpus:
+        raise SystemExit(f"no videos in {corpus_dir}")
+    out.mkdir(parents=True, exist_ok=True)
+    durations = {}
+    mf = corpus_dir / "corpus_manifest.json"
+    if mf.exists():
+        durations = json.loads(mf.read_text()).get("duration_s", {})
+    measured_audio_s = sum(durations.get(v.name) or 0 for v in corpus)
+    (out / "manifest.json").write_text(json.dumps(
+        {"docs": [v.name for v in corpus], "n": len(corpus),
+         "measured_audio_s": measured_audio_s}))
+
+    if mode == "seq":
+        offered = 1
+    elif mode.startswith("c") and mode[1:].isdigit():
+        offered = int(mode[1:])
+    else:
+        raise SystemExit(f"bad mode {mode!r}: LangGraph modes are seq | c<N>")
+
+    for _ in range(300):
+        try:
+            if requests.get(f"{BASE}/health/ready", timeout=3).status_code == 200:
+                break
+        except Exception:
+            pass
+        time.sleep(2)
+    else:
+        raise SystemExit("LangGraph service never became ready")
+    meta = requests.get(f"{BASE}/meta", timeout=5).json()
+    print(f"[lgv] service ready: {meta}", flush=True)
+    print(f"[lgv] corpus={len(corpus)} docs, {measured_audio_s/3600:.2f} h, "
+          f"mode={mode}, warm={warm_docs}", flush=True)
+
+    warm_set = all_videos[n:n + warm_docs]
+    warm_s = None
+    if warm_set:
+        tw = time.perf_counter_ns()
+        for v in warm_set:
+            process_one(v, durations)
+        warm_s = (time.perf_counter_ns() - tw) / 1e9
+        print(f"[lgv] warm-start: {len(warm_set)} docs in {warm_s:.1f}s "
+              f"(excluded)", flush=True)
+
+    progress_fh = open(out / "progress.jsonl", "a", buffering=1)
+    done = [0]
+    sem = asyncio.Semaphore(offered)
+    t0 = time.perf_counter_ns()
+
+    async def one(video):
+        async with sem:
+            rec = await asyncio.to_thread(process_one, video, durations)
+            done[0] += 1
+            progress_fh.write(json.dumps(
+                {"doc": video.name, "action": rec["reason"],
+                 "t_rel_s": round((time.perf_counter_ns() - t0) / 1e9, 1),
+                 "n_done": done[0]}) + "\n")
+            print(f"[lgv] {done[0]}/{len(corpus)} {video.name} {rec['reason']}",
+                  flush=True)
+            return rec
+
+    records = list(await asyncio.gather(*[one(v) for v in corpus]))
+    span = (time.perf_counter_ns() - t0) / 1e9
+
+    ok_n = sum(1 for r in records if r.get("ok"))
+    chunks = sum(r.get("n_chunks") or 0 for r in records)
+    with open(out / "per_doc.jsonl", "w") as fh:
+        for rec in records:
+            fh.write(json.dumps(rec) + "\n")
+        fh.write(json.dumps({
+            "kind": "shot_meta", "arm": ARM, "mode": mode,
+            "n_docs": len(corpus), "ok_docs": ok_n,
+            "span_s": round(span, 2),
+            "measured_audio_s": measured_audio_s,
+            "realtime_factor": round(measured_audio_s / span, 2) if span else None,
+            "total_chunks": chunks,
+            "timeout_s": TIMEOUT_S,
+            "offered_concurrency": offered,
+            "warm_docs": len(warm_set), "warm_s": warm_s,
+            "envelope": os.environ.get("BENCH_ENVELOPE",
+                                       "NONE — sizing run: no cpuset, threads unpinned"),
+        }) + "\n")
+    print(f"[lgv] DONE mode={mode}: {ok_n}/{len(records)} ok, {chunks} chunks, "
+          f"span={span:.1f}s ({measured_audio_s/span:.1f}x realtime)", flush=True)
+    if ok_n < len(records):
+        raise SystemExit(f"RUN INCOMPLETE: {len(records) - ok_n} docs not ok")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
