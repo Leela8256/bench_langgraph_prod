@@ -40,19 +40,98 @@ websocket port 5565.
   video utilization.
 
 **LangGraph** — `arms/langgraph/` → image `videobench-langgraph:v1`,
-container `videobench-langgraph`, HTTP port 8200.
-- FastAPI + LangGraph StateGraph, nodes mirroring the pipe 1:1:
-  frames (ffmpeg `fps=1/15`, lossless PNG) → detect (`rfdetr` RFDETRBase,
-  thr 0.3, engine-format JSON lines) → chunk
-  (RecursiveCharacterTextSplitter 4000/0) → embed
-  (multi-qa-MiniLM-L6-cos-v1, normalized) → assemble.
-- Endpoints: `POST /process` (multipart video → documents JSON with
-  per-node timings), `GET /health/ready` (warm-gated: models loaded AND
-  a synthetic frame pushed through the whole graph), `GET /meta`.
-- Driven by `bench/lg_driver.py` (same record schema as the RR driver):
-  modes seq, c\<N\> (no batch API — that asymmetry is documented, native
-  modes differ by design).
-- Cleans its temp file per request — no scratch accumulation.
+container `videobench-langgraph`, HTTP port 8200. Full architecture:
+
+*Three-layer design* (same layering as the PDF arm, so the framework
+only orchestrates and the computation is framework-free):
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│ service.py — FastAPI transport shell                             │
+│   POST /process · GET /health/ready · GET /meta                  │
+│   (maps to RocketRide's webhook + response_documents — transport │
+│    is the measurement boundary, identical on both arms)          │
+├──────────────────────────────────────────────────────────────────┤
+│ graph.py — LangGraph StateGraph (the orchestration under test)   │
+│   START → frames → detect → chunk → embed → assemble → END       │
+├──────────────────────────────────────────────────────────────────┤
+│ workload/ — pure computation, no fastapi/langgraph imports       │
+│   frames.py · detect.py · chunk.py · embed.py                    │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+*The graph*: a linear five-node `StateGraph` over a `VideoState`
+TypedDict (`video_path, frames, det_lines, chunks, embeddings,
+documents, timings`), compiled ONCE at startup, no checkpointer
+(stateless request/response — persistence would be dead framework
+weight). Each node returns a partial state update and appends its wall
+time to `timings` — the source of the per-node decomposition in reports
+(decode ~55%, detect ~40%, embed ~5% on the box), which the closed
+engine cannot provide. The ~30 MB frame list is dropped from state
+right after detection to keep concurrent-request memory flat. Node names
+mirror the RR pipe 1:1 (`frames`~frame_grabber_1, `detect`~detect_1,
+`chunk`~preprocessor_1, `embed`~embedding_1, `assemble`~response_1);
+RR's transport components are deliberately NOT graph nodes — matched
+measurement boundaries, not matched internal topology.
+
+*Node implementations* (`workload/`):
+- `frames.py` — `ffmpeg -vf fps=1/15` into a TemporaryDirectory as
+  **lossless PNG** (JPEG would perturb the detector's pixels), then PIL
+  RGB. The fps filter matches the engine's own reader semantics — frame
+  counts proven identical (28/28 frame-parity, 102=102 on ES2016d).
+  Binary: system ffmpeg, else pip `imageio-ffmpeg` (the engine's own
+  fallback trick).
+- `detect.py` — `rfdetr` `RFDETRBase` (the backend the engine's
+  detection module prefers), threshold 0.3. Lazy singleton behind a
+  `threading.Lock` that guards model LOADING only — inference is not
+  serialized. COCO names from `rfdetr.assets.coco_classes` (≥1.9
+  layout) with a legacy fallback. Output: one JSON line per frame in
+  the engine's exact format (`json.dumps` defaults — verified byte-what
+  the engine emits).
+- `chunk.py` — `RecursiveCharacterTextSplitter(4000, 0)` over
+  newline-joined lines; parameters recovered empirically (4000/0
+  reproduces the engine's chunks byte-exactly; 4096 and 3600 do not).
+  Dense rooms exceed 4000 chars per frame-line → mid-line splits →
+  chunks are text windows, not valid JSON, on BOTH arms (faithful
+  replication includes the quirk).
+- `embed.py` — `SentenceTransformer` **multi-qa-MiniLM-L6-cos-v1**,
+  CPU, normalized, lazy singleton — the model the engine's `miniLM`
+  profile actually resolves to (verified to 1.06e-07).
+
+*Service shell*: lifespan builds the graph then runs a warmup (a
+synthetic 352×288 frame through detect→chunk→embed) BEFORE
+`/health/ready` returns 200 — cold model loads can never land inside a
+measured request; drivers gate on readiness. `POST /process` streams
+the upload to a NamedTemporaryFile in 4 MB chunks, runs the graph via
+`anyio.to_thread` (event loop stays live for health checks), returns
+documents + `n_frames`/`n_chunks`/`total_chars`/`output_sha256` +
+per-node timings, then deletes the temp file — **no scratch
+accumulation** (contrast RR's retained uploads). `GET /meta` returns
+the arm's config identity for provenance.
+
+*Concurrency model — why c6 reached ~19 cores*: one uvicorn process;
+each in-flight request runs one graph invocation in a worker thread;
+model singletons are SHARED (anon RSS flat ~2.8 GB at any concurrency).
+Parallelism comes from torch releasing the GIL during inference (six
+threads = six genuine parallel inferences, each spread further by
+torch's intra-op threading when unpinned) and ffmpeg running as
+separate subprocesses. Measured: 19.5 effective cores from 225 OS
+threads vs the engine's 5.45 cores from ~1,000 threads — same per-unit
+CPU cost, ~3.6× the parallelism. Under the matched envelope
+(`OMP_NUM_THREADS=1` both arms) torch's intra-op spread is removed and
+the c\<N\> window remains the variable under test.
+
+*Determinism (measured)*: same video on the same host → byte-identical
+output (rep pairs: identical output_sha256 and embedding digests);
+across hosts ±1% (ffmpeg builds / torch numerics flip borderline
+detections) — hence all gates compare within-platform and arm-vs-arm
+runs are box-vs-box only.
+
+*Driven by* `bench/lg_driver.py` (same `per_doc.jsonl` schema as the RR
+driver): modes seq, c\<N\> — its native ingestion is per-request HTTP;
+there is no batch API, and that asymmetry is documented rather than
+papered over. Versions float for smokes; **`pip freeze` pin before
+measured runs** (the rfdetr-1.9 import move is the cautionary tale).
 
 Shared: docker volume `rr-model-cache` (~9.4 GB: torch stacks, rfdetr
 checkpoint, MiniLM weights) mounted by BOTH arms — models download once
