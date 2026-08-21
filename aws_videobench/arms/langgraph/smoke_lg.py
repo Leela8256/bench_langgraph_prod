@@ -19,7 +19,8 @@ BASE = sys.argv[1]
 videos = sys.argv[2:]
 assert videos, "give at least one video path"
 
-for _ in range(120):
+# Generous: a cold cache downloads rfdetr + miniLM weights before ready.
+for _ in range(300):
     try:
         if requests.get(f"{BASE}/health/ready", timeout=3).status_code == 200:
             break
