@@ -254,7 +254,6 @@ S3-read preflight).
 |---|---|
 | extend fetch_ami.sh meeting list to EN/IB/IN (135 → 170) | small |
 | stage full corpus to S3 (§2), verify, delete EBS copy | one command + ~2 h mirror time |
-| run_waves.sh: stage waves via /dev/shm (§3) instead of EBS | small |
 | LG bench driver emitting the per_doc.jsonl record schema | medium |
 | envelope wiring for video (§6) — port from aws_bench | medium |
 | per-video detection counts in driver records (V0 gate) | one line |
