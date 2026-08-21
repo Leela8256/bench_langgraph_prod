@@ -74,9 +74,12 @@ the utilization ceiling (row 6), not computation efficiency (row 5).
 | chunks/video (workload check) | 37.4 | 36.8 | 90.9 | 89.7 | tie (equal work) |
 | frames/video | 124.5 | 124.5 | 124.9 | 124.9 | tie (identical) |
 
-RocketRide's 36.4× is its fifth consecutive run in the 36.2–36.8× band —
-across modes, corpus sizes, staging media, and thread settings. It is a
-hard engine property.
+RocketRide has now run five times: four land inside 36.2–36.8×
+(36.18, 36.46, 36.40, 36.76) across modes, corpus sizes, and staging
+media; the threads=32 run was the one outlier at 40.66× — 12% faster
+with byte-identical output, attributed to scheduling variance since its
+CPU usage was unchanged. The ceiling, not the exact number, is the hard
+engine property.
 
 ### V2 — Latency (mode-labeled; cross-arm comparison ONLY within run A)
 
@@ -115,10 +118,10 @@ The study's central result lives in this table: identical per-unit cost,
 
 | metric | A: RR | A: LG | B: RR | B: LG | winner |
 |---|---|---|---|---|---|
-| peak memory, raw cgroup incl. cache (GB) | 34.7 | 19.9 | 23.7 | **6.2** | LG |
-| cold-start to ready (s) | 104.0 | **54.0** | 118.2 | **58.8** | LG |
-| framework overhead (s, total per run) | not measurable | **0.47** | not measurable | **0.14** | — (LG's is ~zero; RR is a black box — the asymmetry is itself a finding) |
-| stage split | n/a | frames 6% / detect 92% / embed 1% | n/a | frames 12% / detect 87% / embed 1% | — |
+| peak memory, raw cgroup incl. cache (GB) | 23.7 | **6.2** | 34.7 | **19.9** | LG |
+| cold-start to ready (s) | 118.2 | **58.8** | 104.0 | **54.0** | LG |
+| framework overhead (s, total per run) | not measurable | **0.14** | not measurable | **0.47** | — (LG's is ~zero; RR is a black box — the asymmetry is itself a finding) |
+| stage split | n/a | frames 12% / detect 87% / embed 1% | n/a | frames 6% / detect 92% / embed 1% | — |
 
 Two notes: raw peak memory includes reclaimable page cache (the
 cache-corrected anon numbers ran ~4.1 GB RR / ~2.8 GB LG mid-run in A);
@@ -151,7 +154,8 @@ decode parallelizes away, inference is the true cost center.
    RocketRide holds 5.4–5.9 in every configuration tested. Throughput
    and cost gaps (3.8→4.1×) follow entirely from scheduling.
 2. **RocketRide's ceiling is engine-bound and unmovable by any shipped
-   knob** — threads=32 was a proven no-op; 3,804 threads for 5.87 busy
+   knob** — threads=32 left utilization unchanged (5.59 cores; its 40.7×
+   span was scheduling variance, not extra CPU); 3,804 threads for 5.87 busy
    cores at 60-video blast (see findings/rocketride_cpu_utilization.md).
 3. **LangGraph's framework tax is ~zero** (0.14–0.47 s total per run) —
    consistent with the agent-framework literature; its cost center is
