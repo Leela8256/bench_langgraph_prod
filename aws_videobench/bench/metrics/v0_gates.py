@@ -84,6 +84,12 @@ def frame_law(records):
         expect = int(r["duration_s"] // FRAME_INTERVAL_S) + 1
         if abs(r["n_frames_est"] - expect) > 1:
             problems.append(f"{r['doc']}: {r['n_frames_est']} frames, expected ~{expect}")
+        # detect-pipe bound (haystack-suite interval probe): chunks track
+        # text volume, so they may exceed frames in dense rooms but never
+        # unboundedly — chunks <= 1.5*frames + 1.
+        if (r.get("n_chunks") or 0) > 1.5 * r["n_frames_est"] + 1:
+            problems.append(f"{r['doc']}: {r['n_chunks']} chunks > "
+                            f"1.5x{r['n_frames_est']} frames + 1")
     if checked == 0:
         return _g("frame_law", "SKIP",
                   f"n_frames_est/duration_s absent on all {missing} records "
@@ -122,7 +128,10 @@ def determinism(rep_records):
         for d in sorted(common):
             compared += 1
             if base[d].get("chunk_sha256") != rep[d].get("chunk_sha256"):
-                problems.append(f"{d}: hashes differ rep1 vs rep{rep_i}")
+                problems.append(f"{d}: chunk hashes differ rep1 vs rep{rep_i}")
+            ea, eb = base[d].get("embedding_sha256"), rep[d].get("embedding_sha256")
+            if ea and eb and ea != eb:
+                problems.append(f"{d}: embedding digests differ rep1 vs rep{rep_i}")
     if compared == 0:
         return _g("determinism", "FAIL", "no common docs across reps")
     return _g("determinism", "FAIL" if problems else "PASS",
@@ -190,3 +199,52 @@ def input_identity(arm_a, arm_b):
     return _g("input_identity", "FAIL" if bad else "PASS",
               f"differing inputs: {bad[:5]}" if bad else
               f"{len(common)} docs, identical input bytes")
+
+
+def corpus_pin(records, manifest):
+    """Corpus identity: input bytes vs the manifest's sha map (haystack-suite
+    'corpus pin'). SKIP when the manifest carries no shas."""
+    shas = (manifest or {}).get("sha256") or {}
+    if not shas:
+        return _g("corpus_pin", "SKIP",
+                  "manifest carries no sha256 map (staged sets do; ad-hoc sets may not)")
+    bad = []
+    for r in records:
+        want = shas.get(r["doc"], {}).get("sha256")
+        if want and want != r.get("input_sha256"):
+            bad.append(r["doc"])
+    return _g("corpus_pin", "FAIL" if bad else "PASS",
+              f"drifted from manifest: {bad[:5]}" if bad else
+              f"{sum(1 for r in records if r['doc'] in shas)} docs match the pinned shas")
+
+
+def chunk_parity_tight(arm_a, arm_b):
+    """The haystack-suite's strict parity: per video |a-b| <= 1 chunk; total
+    within 5% OR abs diff <= 1. WARN-level here: our arms run different
+    detector builds (functional replication, not byte parity), so treat as
+    a diagnostic band inside the hard chunk_ratio gate."""
+    common = sorted(set(arm_a) & set(arm_b))
+    per = [d for d in common
+           if abs((arm_a[d].get("n_chunks") or 0) - (arm_b[d].get("n_chunks") or 0)) > 1]
+    ta = sum(arm_a[d].get("n_chunks") or 0 for d in common)
+    tb = sum(arm_b[d].get("n_chunks") or 0 for d in common)
+    total_ok = (abs(ta - tb) <= 1) or (tb and abs(ta / tb - 1) <= 0.05)
+    if not per and total_ok:
+        return _g("chunk_parity_tight", "PASS",
+                  f"per-video |delta|<=1 on all {len(common)}; totals {ta} vs {tb}")
+    detail = []
+    if per:
+        detail.append("per-video >1: " + "; ".join(
+            f"{d}: {arm_a[d].get('n_chunks')} vs {arm_b[d].get('n_chunks')}"
+            for d in per[:5]))
+    if not total_ok:
+        detail.append(f"totals {ta} vs {tb} ({ta / tb:.3f})" if tb else "no B total")
+    return _g("chunk_parity_tight", "WARN", "; ".join(detail))
+
+
+def workload_ratio(arm_a, arm_b):
+    """Total produced-work ratio (informational, not a gate)."""
+    common = set(arm_a) & set(arm_b)
+    ta = sum(arm_a[d].get("n_chunks") or 0 for d in common)
+    tb = sum(arm_b[d].get("n_chunks") or 0 for d in common)
+    return round(ta / tb, 3) if tb else None

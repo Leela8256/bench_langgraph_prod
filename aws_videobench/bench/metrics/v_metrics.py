@@ -10,12 +10,13 @@ DEFAULT_ALLOCATED_CORES = 32
 
 
 def _pct(sorted_vals, p):
+    """Nearest-rank percentile — deterministic, no interpolation (the
+    haystack-suite convention, adopted 2026-08-21)."""
     if not sorted_vals:
         return None
-    k = (len(sorted_vals) - 1) * p / 100
-    f = int(k)
-    c = min(f + 1, len(sorted_vals) - 1)
-    return sorted_vals[f] + (sorted_vals[c] - sorted_vals[f]) * (k - f)
+    import math
+    k = max(1, math.ceil(len(sorted_vals) * p / 100)) - 1
+    return sorted_vals[min(k, len(sorted_vals) - 1)]
 
 
 def v1_throughput(records, meta):
@@ -33,7 +34,10 @@ def v1_throughput(records, meta):
         "videos_per_s": round(len(ok) / span, 4),
         "chunks_per_s": round(chunks / span, 3),
         "frames_per_s": round(frames / span, 3) if frames else None,
+        "chunks_per_video": round(chunks / len(ok), 1) if ok else None,
+        "frames_per_video": round(frames / len(ok), 1) if ok and frames else None,
         "realtime_streams_sustainable": round(x_rt, 1) if x_rt else None,
+        "video_seconds": round(audio_s, 1) if audio_s else None,
         "footage_hours": round(audio_s / 3600, 2),
         "span_s": span,
     }
@@ -49,11 +53,17 @@ def v2_latency(records, meta, progress=None):
         per_min = sorted(
             (r["completion_ns"] - r["submit_ns"]) / 1e9 / (r["duration_s"] / 60)
             for r in ok if r.get("duration_s"))
+        failed = [r["doc"] for r in records if not r.get("ok")]
         out.update({
             "service_latency_s": {"p50": round(_pct(lats, 50), 2),
-                                  "p90": round(_pct(lats, 90), 2),
+                                  "p95": round(_pct(lats, 95), 2),
                                   "p99": round(_pct(lats, 99), 2)} if lats else None,
             "latency_s_per_footage_min": round(_pct(per_min, 50), 3) if per_min else None,
+            "failed_items": len(failed),
+            "time_to_first_result_s": (round(min(
+                (r["completion_ns"] - r["submit_ns"]) / 1e9 for r in ok), 1)
+                if ok else None),
+            "time_to_first_result_basis": "first completed request (per-item mode)",
         })
     else:  # blast / batch: batch-position semantics, never service latency
         out["note"] = ("batch span is exact; per-doc completion is batch-"
@@ -64,6 +74,10 @@ def v2_latency(records, meta, progress=None):
                         if p.get("action") in ("complete", "completed"))
             if ts:
                 out["time_to_first_result_s"] = round(ts[0], 1)
+                out["time_to_first_result_basis"] = (
+                    "first client-observed completion event within the batch — "
+                    "NOT comparable to an atomic batch API's first result "
+                    "without this basis string")
                 out["completion_curve_s"] = {"p50": round(_pct(ts, 50), 1),
                                              "p90": round(_pct(ts, 90), 1),
                                              "last": round(ts[-1], 1)}
@@ -83,9 +97,17 @@ def cpu_from_sampler(sampler_rows, span_s=None):
         mem_max = None
     if dt <= 0:
         return None
-    return {"window_s": dt, "cpu_s": round(cpu_s, 1),
-            "effective_cores": round(cpu_s / dt, 2),
-            "mem_current_max_bytes": mem_max}
+    out = {"window_s": dt, "cpu_s": round(cpu_s, 1),
+           "effective_cores": round(cpu_s / dt, 2),
+           "mem_current_max_bytes": mem_max}
+    # Optional 4th/5th columns (pids.current, anon bytes) — newer samplers.
+    pids = [r[3] for r in rows if len(r) >= 4]
+    if pids:
+        out["threads_activated"] = max(pids) - pids[0]
+    anon = [r[4] for r in rows if len(r) >= 5]
+    if anon:
+        out["peak_rss_bytes_anon"] = max(anon)   # cache-corrected RSS
+    return out
 
 
 def v3_efficiency(records, meta, cpu, allocated_cores=DEFAULT_ALLOCATED_CORES):
@@ -98,11 +120,14 @@ def v3_efficiency(records, meta, cpu, allocated_cores=DEFAULT_ALLOCATED_CORES):
     chunks = sum(r.get("n_chunks") or 0 for r in ok)
     c = cpu["cpu_s"]
     return {
+        "cpu_s_per_video": round(c / len(ok), 1) if ok else None,
         "cpu_s_per_footage_min": round(c / audio_min, 2) if audio_min else None,
         "cpu_s_per_frame": round(c / frames, 3) if frames else None,
         "cpu_s_per_detection": round(c / dets, 4) if dets else None,
         "cpu_s_per_chunk": round(c / chunks, 3) if chunks else None,
         "effective_cores": cpu["effective_cores"],
+        "achieved_parallelism": cpu["effective_cores"],   # haystack-suite name
+        "threads_activated": cpu.get("threads_activated"),
         "allocated_cores": allocated_cores,
         "scaling_efficiency": round(cpu["effective_cores"] / allocated_cores, 3),
         "note": "utilization is against the ARM'S ALLOCATION, span-averaged",
@@ -140,3 +165,43 @@ def v5_cost(v1, usd_per_hour=DEFAULT_USD_PER_HOUR):
         "videos_per_day_per_box": int(x * 24 * 2),   # at 30-min videos
         "assumes": f"${usd_per_hour}/h instance, 30-min videos",
     }
+
+
+def cross_mode(runs_by_mode, configured_concurrency=None):
+    """Same arm, different modes: speedup and parallel efficiency
+    (haystack-suite §4). runs_by_mode: {mode: v1_block}. Ratio of ratios —
+    each side normalized against itself."""
+    seqs = [m for m in runs_by_mode if m == "seq"]
+    pars = [m for m in runs_by_mode if m != "seq"]
+    if not seqs or not pars:
+        return None
+    base = runs_by_mode[seqs[0]].get("chunks_per_s")
+    out = {}
+    for m in pars:
+        top = runs_by_mode[m].get("chunks_per_s")
+        if base and top:
+            sp = round(top / base, 2)
+            out[f"speedup_{m}_over_seq"] = sp
+            if configured_concurrency:
+                out[f"parallel_efficiency_{m}"] = round(
+                    sp / configured_concurrency, 3)
+    out["note"] = ("parallel_efficiency meaningful only when docs >= "
+                   "concurrency")
+    return out or None
+
+
+def coverage(blocks, exemptions=()):
+    """The haystack-suite coverage gate: a null metric must be a named
+    exemption, or the run fails coverage — 'we did not check' must never
+    read as 'it passed'."""
+    nulls = []
+    for block_name, block in blocks.items():
+        if not isinstance(block, dict):
+            continue
+        for k, v in block.items():
+            if v is None and not any(e in f"{block_name}.{k}" for e in exemptions):
+                nulls.append(f"{block_name}.{k}")
+    status = "FAIL" if nulls else "PASS"
+    return {"gate": "metric_coverage", "status": status,
+            "detail": ("all metrics non-null or exempt" if not nulls else
+                       f"null without exemption: {nulls[:8]}")}

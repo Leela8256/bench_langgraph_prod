@@ -41,7 +41,7 @@ def load_run(d):
         for line in open(f):
             p = line.strip().split(",")
             if p and p[0].isdigit():
-                sampler.append(tuple(int(x) for x in p[:3]))
+                sampler.append(tuple(int(x) for x in p if x.lstrip("-").isdigit()))
     progress = []
     if (d / "progress.jsonl").exists():
         progress = [json.loads(l) for l in open(d / "progress.jsonl")]
@@ -58,7 +58,8 @@ def run_gates(run):
     recs, man = run["records"], run["manifest"].get("docs") or \
         [r["doc"] for r in run["records"]]
     return [v0.census(recs, man), v0.structure(recs),
-            v0.frame_law(recs), v0.self_duplication(recs)]
+            v0.frame_law(recs), v0.self_duplication(recs),
+            v0.corpus_pin(recs, run["manifest"])]
 
 
 def report_one(run):
@@ -80,7 +81,18 @@ def report_one(run):
                         ("V3 efficiency", v3), ("V4 resources", v4),
                         ("V5 cost", v5)):
         print(f"  {name}: {json.dumps(block)}")
+    cov = vm.coverage(
+        {"V1": v1, "V2": v2, "V3": v3, "V5": v5},
+        exemptions=("frames" if any(g["gate"] == "frame_law" and
+                                    g["status"] == "SKIP" for g in gates) else "",
+                    "threads_activated",          # sampler-version dependent
+                    "time_to_first_result",       # mode dependent
+                    "cpu_s_per_frame", "cpu_s_per_detection",
+                    "peak_mem", "cold_to_ready"))
+    print(gate_line(cov))
+    gates.append(cov)
     print(f"  envelope: {run['meta'].get('envelope', 'NOT RECORDED')}")
+    run["v1"] = v1
     return gates
 
 
@@ -104,9 +116,11 @@ def main():
         print("\n== cross-arm (rep1 vs rep1)")
         a = {r["doc"]: r for r in rr_runs[0]["records"]}
         b = {r["doc"]: r for r in lg_runs[0]["records"]}
-        for g in [v0.input_identity(a, b)] + v0.cross_arm(a, b, "rr", "lg"):
+        for g in ([v0.input_identity(a, b)] + v0.cross_arm(a, b, "rr", "lg")
+                  + [v0.chunk_parity_tight(a, b)]):
             print(gate_line(g))
             all_gates.append(g)
+        print(f"  workload_ratio_rr_over_lg: {v0.workload_ratio(a, b)}")
     else:
         runs = [load_run(d) for d in args]
         for run in runs:
@@ -116,6 +130,11 @@ def main():
             print("\n== determinism (across given runs)")
             print(gate_line(g))
             all_gates.append(g)
+            by_mode = {x["meta"].get("mode"): x.get("v1", {}) for x in runs}
+            conc = next((int(m[1:]) for m in by_mode if m and m.startswith("c")), None)
+            cm = vm.cross_mode(by_mode, conc)
+            if cm:
+                print(f"  cross-mode: {json.dumps(cm)}")
         else:
             print("\n  NOTE: single run — determinism unproven; not a "
                   "benchmark result (sizing evidence only)")

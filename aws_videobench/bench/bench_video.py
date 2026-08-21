@@ -69,6 +69,17 @@ def base_record(video, durations):
             "duration_s": durations.get(video.name)}
 
 
+def embedding_digest(docs):
+    """sha256 over the ordered embedding sequence (haystack-suite digest) —
+    lets determinism compare vectors across runs/modes without storing them."""
+    import struct
+    h = hashlib.sha256()
+    for d in docs:
+        v = d.get("embedding") or []
+        h.update(struct.pack(f"<{len(v)}d", *v))
+    return h.hexdigest()
+
+
 def fill_from_docs(rec, docs):
     okv, why = verify(docs)
     texts = [d.get("page_content", "") for d in docs]
@@ -88,6 +99,7 @@ def fill_from_docs(rec, docs):
     norms = [sum(x * x for x in (d.get("embedding") or [])) ** 0.5 for d in docs]
     rec["l2_norms_minmax"] = ([round(min(norms), 6), round(max(norms), 6)]
                               if norms else None)
+    rec["embedding_sha256"] = embedding_digest(docs) if docs else None
     return okv, why
 
 
@@ -324,6 +336,14 @@ async def main():
             "realtime_factor": round(measured_audio_s / span, 2) if span else None,
             "total_chunks": chunks,
             "timeout_s": TIMEOUT_S,
+            "offered_concurrency": (len(corpus) if mode == "blast" else
+                                    1 if mode == "seq" else int(mode[1:])),
+            "pipe_sha256": hashlib.sha256(PIPE_SRC.read_bytes()).hexdigest(),
+            "provenance": {"pipeline_kind": "detect", "interval_s": 15,
+                           "detect_model": "rfdetr", "threshold": 0.3,
+                           "embed_model": "multi-qa-MiniLM-L6-cos-v1",
+                           "split": {"chunk_size": 4000, "overlap": 0},
+                           "expect_dim": 384},
             "threads_requested": threads,
             "warm_docs": len(warm_set), "warm_s": warm_s,
             "event_actions_seen": dict(event_actions),

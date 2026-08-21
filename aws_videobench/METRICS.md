@@ -118,6 +118,39 @@ is span-averaged — read the distribution, not just the mean.
 5. Numbers from unpinned sizing runs (everything before the first matched
    run) are sizing evidence, never benchmark results.
 
+## Incorporated from the haystack-suite implementation (2026-08-21)
+
+Adopted from `VIDEO-METRICS-IMPLEMENTED.md` (the sibling benchmark's
+implemented suite), keeping their global rule — **anything that cannot be
+computed is None, never 0, never inf**:
+
+- **nearest-rank percentiles** (deterministic, no interpolation); p95 added
+- `chunks_per_video`, `frames_per_video`, `cpu_s_per_video`,
+  `video_seconds` (denominators disclosed, not derived)
+- `achieved_parallelism` (alias of effective_cores) and
+  `threads_activated` (cgroup pids delta; exempt in sequential mode —
+  a warm pool adds no tasks)
+- `failed_items` counted, never averaged into latency
+- `time_to_first_result_basis` strings — an atomic batch API's "first
+  result" and a per-request pool's are honest but NOT the same quantity
+- cross-mode `speedup_<mode>_over_seq` + `parallel_efficiency`
+  (ratio-of-ratios; meaningful only when docs >= concurrency)
+- total `workload_ratio` beside the per-video bands
+- gates: `corpus_pin` (records vs manifest sha map), `chunk_parity_tight`
+  (per-video |Δ|<=1, totals within 5% — WARN-level here since our arms run
+  different detector builds), detect-pipe chunk upper bound
+  (chunks <= 1.5x frames + 1) inside `frame_law`, embedding digests in
+  `determinism` (sha256 over the ordered vector bytes), and
+  **metric_coverage** — a null metric must be a named exemption, so
+  "we did not check" can never read as "it passed"
+- provenance blocks in shot_meta: `pipe_sha256`, pipeline_kind, interval,
+  model identities, split params, expect_dim
+
+Still not implemented (their §8 + ours): bytes-over-network per video,
+transport-vs-processing split, RSS-vs-length slope, max-concurrent-before-
+OOM, blast-radius/recovery, toil. Do not present the suite as covering
+these.
+
 ## Prior-art sources
 
 - MLPerf Inference rules: github.com/mlcommons/inference_policies

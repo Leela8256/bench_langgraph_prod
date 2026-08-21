@@ -26,10 +26,10 @@ AWS_BIN="$(command -v aws || echo /usr/local/bin/aws)"
 mkdir -p "$OUT/rr" "$OUT/lg"
 
 sampler() {  # $1 container, $2 csv
-  ( echo "ts,cpu_usage_usec,mem_current"
+  ( echo "ts,cpu_usage_usec,mem_current,pids,anon_bytes"
     while docker inspect -f '{{.State.Running}}' "$1" 2>/dev/null | grep -q true; do
       line=$(docker exec "$1" sh -c \
-        'awk "/^usage_usec/{print \$2}" /sys/fs/cgroup/cpu.stat; cat /sys/fs/cgroup/memory.current' \
+        'awk "/^usage_usec/{print \$2}" /sys/fs/cgroup/cpu.stat; cat /sys/fs/cgroup/memory.current; cat /sys/fs/cgroup/pids.current 2>/dev/null || echo 0; awk "/^anon /{print \$2}" /sys/fs/cgroup/memory.stat 2>/dev/null || echo 0' \
         2>/dev/null | tr '\n' ',') || line=""
       [ -n "$line" ] && echo "$(date +%s),${line%,}"
       sleep 15

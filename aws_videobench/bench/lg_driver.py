@@ -31,6 +31,15 @@ def base_record(video, durations):
             "duration_s": durations.get(video.name)}
 
 
+def embedding_digest(docs):
+    import struct
+    h = hashlib.sha256()
+    for d in docs:
+        v = d.get("embedding") or []
+        h.update(struct.pack(f"<{len(v)}d", *v))
+    return h.hexdigest()
+
+
 def fill_from_response(rec, out):
     docs = out.get("documents", [])
     texts = [d.get("page_content", "") for d in docs]
@@ -49,6 +58,7 @@ def fill_from_response(rec, out):
     norms = [sum(x * x for x in (d.get("embedding") or [])) ** 0.5 for d in docs]
     rec["l2_norms_minmax"] = ([round(min(norms), 6), round(max(norms), 6)]
                               if norms else None)
+    rec["embedding_sha256"] = embedding_digest(docs) if docs else None
     rec["lg_timings"] = out.get("timings")     # per-node decomposition (V4)
     rec["lg_n_frames_reported"] = out.get("n_frames")
     return okv
@@ -170,6 +180,11 @@ async def main():
             "total_chunks": chunks,
             "timeout_s": TIMEOUT_S,
             "offered_concurrency": offered,
+            "provenance": {"pipeline_kind": "detect", "interval_s": 15,
+                           "detect_model": "rfdetr", "threshold": 0.3,
+                           "embed_model": "multi-qa-MiniLM-L6-cos-v1",
+                           "split": {"chunk_size": 4000, "overlap": 0},
+                           "expect_dim": 384, "service_meta": meta},
             "warm_docs": len(warm_set), "warm_s": warm_s,
             "envelope": os.environ.get("BENCH_ENVELOPE",
                                        "NONE — sizing run: no cpuset, threads unpinned"),
