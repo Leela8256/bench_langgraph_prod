@@ -165,6 +165,43 @@ engine output):
 transcription); it carries the known Whisper nondeterminism (R5) and is
 not the current benchmark pipe.
 
+### 3.1 The object-detection stage, in both arms (the pipeline's cost center)
+
+Both arms run **the same detector: RF-DETR** (Roboflow's DETR-family
+real-time detector, Apache-2.0, "base" variant — ~29M params, 560-px
+input, COCO-80 classes), on CPU, threshold 0.3. The sameness is by
+construction; the differences are in hosting:
+
+| | RocketRide | LangGraph |
+|---|---|---|
+| component | `detect` node, profile `rfdetr` | `detect` graph node → `workload/detect.py` |
+| implementation | engine's `ai/common/models/vision/detection.py`, which PREFERS the same `rfdetr` pip package (`RFDETRBase`); RT-DETR only as fallback | `rfdetr` pip package, `RFDETRBase`, directly |
+| package version | whatever the engine resolved at build (older API generation) | current release (1.9.x — note the `assets.coco_classes` relocation) |
+| weights | `rf-detr-base.pth`, auto-downloaded to the engine model cache | same checkpoint family, in the shared `rr-model-cache` volume |
+| model instances | ONE shared instance behind a device lock — prime suspect for the ~6-core ceiling | one shared instance; lock guards LOADING only, inferences run concurrently (torch releases the GIL) |
+| output | one JSON array per frame: `[{"label","score","box":{x1,y1,x2,y2},"centroid":{x,y}}, …]` | byte-identical format (replicated from a captured engine response) |
+| measured cost | ~2.62 cpu-s/frame | ~2.36–2.74 cpu-s/frame — statistically the same work |
+
+Notes:
+- The engine also ships an open-vocabulary profile (`mmgdino`,
+  Grounding-DINO); both arms deliberately use closed-set `rfdetr` —
+  deterministic, local, pip-replicable.
+- The package-version gap is the ONLY real difference and it is
+  measured: a handful of borderline detections flip, keeping per-video
+  detection counts within 2.4% (e.g. 332 vs 328 on ES2016d). This is
+  why the cross-arm gate is a ±10% band, not byte parity (decision
+  2026-08-20); chunk-count drift (±3) and workload ratio (1.013)
+  inherit from it.
+- On AMI footage it detects meeting-room reality — person, chair, tv,
+  laptop, cell phone, books: ~3 detections/frame in Edinburgh rooms,
+  ~16/frame in Idiap rooms (bookshelves) — the source of the 5×
+  chunk-density variance the work-normalized metrics absorb.
+- It is the pipeline's true cost center: ~87–92% of LangGraph's time
+  under concurrency (decode parallelizes away), and the per-frame CPU
+  numbers above are where the two arms prove equally efficient — the
+  head-to-head gap comes from how many inferences run AT ONCE, not how
+  fast each one is.
+
 ## 4. Corpus
 
 | set | contents | where |
