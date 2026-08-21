@@ -7,8 +7,8 @@
 #   storage — scratch is released every wave (engines hold uploads for the
 #             container lifetime); wave corpus is deleted after its wave;
 #             peak disk = fixed footprint + W x ~141 MB x 2
-#   cores   — the ~6-core ceiling is per-engine (threads=32 proved it), so
-#             K engines put ~6K cores to work
+#   cores   — measured as shipped: ONE engine per arm (its ~6-core ceiling
+#             is a reported finding, not something the harness works around)
 #
 # Corpus modes:
 #   CORPUS_MODE=replicate  (default) cycle the ami30h corpus into TOTAL
@@ -27,7 +27,7 @@ cd "$(dirname "$0")/.."
 
 TOTAL="${TOTAL:-500}"
 W="${W:-100}"
-K="${K:-5}"
+K="${K:-1}"   # ONE engine — the benchmark measures the engine as it ships
 CORPUS_MODE="${CORPUS_MODE:-replicate}"
 SRC_DIR="${SRC_DIR:-$HOME/bench_corpus_ami30h}"
 S3_CORPUS="${S3_CORPUS:-}"
