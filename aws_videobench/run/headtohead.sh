@@ -38,9 +38,11 @@ sampler() {  # $1 container, $2 csv
 }
 
 echo "== [1/6] corpus: 30 videos from S3 (cache-if-present)"
-have=$(find "$CORPUS_DIR" -name '*.avi' 2>/dev/null | wc -l | tr -d ' ')
+# mkdir FIRST: find on a nonexistent dir exits 1, and under pipefail+set -e
+# that killed the whole script silently right here (bit twice, 2026-08-21).
+mkdir -p "$CORPUS_DIR"
+have=$(find "$CORPUS_DIR" -name '*.avi' | wc -l | tr -d ' ')
 if [ "$have" -lt 30 ]; then
-  mkdir -p "$CORPUS_DIR"
   "$AWS_BIN" s3 cp "$S3_CORPUS/" "$CORPUS_DIR/" --recursive --quiet
 fi
 echo "   $(find "$CORPUS_DIR" -name '*.avi' | wc -l | tr -d ' ') videos, $(du -sh "$CORPUS_DIR" | cut -f1)"
