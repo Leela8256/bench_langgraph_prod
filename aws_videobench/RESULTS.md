@@ -25,7 +25,7 @@ Raw records (every number re-derivable forever):
 | 4 | Time-to-first-result (run A, same basis) | **LangGraph** | 39 s vs 160 s |
 | 5 | **CPU efficiency** (cpu-s per footage-min) | **tie** | ≤10% apart, winner alternates by run |
 | 6 | Core utilization (effective cores of 32) | **LangGraph** | 25.6 vs 5.9 (B) |
-| 7 | Peak memory (raw cgroup, incl. cache) | **LangGraph** | 6.2 GB vs 23.7 GB (B) |
+| 7 | Peak memory (raw cgroup, incl. cache) | **LangGraph** | 19.9 vs 34.7 GB (B); 6.2 vs 23.7 (A) |
 | 8 | Cold-start to ready | **LangGraph** | ~55 s vs ~110 s |
 | 9 | Work done (equal-work check, not a race) | **tie by design** | ratio 1.013 |
 | 10 | Determinism (from earlier same-platform rep pairs) | **tie** | both byte-identical across reps |
