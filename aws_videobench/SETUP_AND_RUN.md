@@ -1,131 +1,200 @@
-# Setup and Run — the video benchmark, explained simply
+# Video Benchmark — Setup & Run Reference (team status, 2026-08-21)
 
-What this folder is, what the moving parts are, and exactly what happens
-when a benchmark run executes. No waves: with the 1 TB disk there is
-enough room to process the whole corpus in one go, so the run is a
-straight line. (The wave machinery still exists in `run/run_waves.sh` for
-future corpora too big for the disk — see the note at the end.)
+The complete operational picture: infrastructure, both services, the
+pipeline configuration, how a run executes (no waves — see why), and the
+current state of every asset. Enough detail to operate the benchmark
+from a fresh clone + AWS access.
 
-## The cast of characters
+## 1. Infrastructure
 
-There are only four things involved:
+| item | value |
+|---|---|
+| instance | `i-0bdc8b1e18f2a5348`, **c7i.8xlarge** (32 vCPU / 61 GB RAM), us-east-1a |
+| disk | **1 TB gp3** (resized from 100 GB on 2026-08-21; ~900 GB free) |
+| RAM tmpfs | `/dev/shm` ≈ 30 GB (used by the wave runner; idle otherwise) |
+| access | SSM sessions only (no SSH/scp); laptop control via `aws_bench/local/box.sh` (start/stop/run/launch/tail); sessions need a pty (agent ≥3.3.4793.0 — box.sh handles it) |
+| auth | laptop: SSO profile `leela` (expires every few hours, browser re-login); box: instance role (never expires; long runs unaffected) |
+| S3 bucket | `s3://rocketride-benchmark-data/leela/` — box role has put+get; laptop has get |
+| S3 layout | `corpus/<set>/` (videos + corpus_manifest.json), `videobench/<run>-<stamp>/` (all results, live-synced every 60 s during runs) |
+| cost | ~$1.43/h while running; **always `box.sh stop` after work** (idle auto-stop exists but is not guaranteed prompt) |
 
-1. **The box** — one AWS machine (32 processor cores, 61 GB memory, 1 TB
-   disk). Everything runs here. Your laptop only starts/stops it and
-   reads results.
-2. **S3** — Amazon's file storage. It permanently holds two things: the
-   **corpus** (the meeting videos, prepared and ready) and the **results**
-   of every run. Think of it as the filing cabinet: the box is
-   disposable, S3 is not.
-3. **Two "arms"** — the two systems being compared, each packaged as a
-   container (a self-contained app the box can start and stop):
-   - **RocketRide** — the commercial engine. We install it exactly as
-     shipped (version 3.3.1), plus two small documented repairs: one that
-     lets it start on Linux at all, and one that stops it from
-     accidentally sending every result twice. Both repairs are recorded;
-     results always say "3.3.1 with the documented corrections".
-   - **LangGraph** — our own service, built to do exactly the same job
-     step for step, using the same models and the same settings.
-4. **The client** — a third container that feeds videos to whichever arm
-   is being tested and writes down what comes back. It is separate on
-   purpose: the effort of *sending* videos must never be counted as part
-   of the arm's own effort.
+## 2. The two arms (one engine each; only the framework varies)
 
-## What the pipeline does to one video
+**RocketRide** — `arms/rocketride/Dockerfile` → image
+`videobench-rocketride:3.3.1`, container `videobench-rocketride`,
+websocket port 5565.
+- Engine release 3.3.1, tarball SHA-pinned (build fails on a silent swap).
+- Two documented patches, recorded in image labels + provenance:
+  (1) onnxruntime-gpu 1.20.1→1.20.2 pin fix — 3.3.1 cannot boot on Linux
+  without it, and the broken pin sits in the video nodes' own
+  requirements; (2) `BUG_CHUNK_DUPLICATION` — `preventDefault()` after
+  the embedding flush, without which ~40% of results are emitted twice
+  (measured on 987 PDFs; gate `self_duplication` guards it forever).
+  Describe results as "3.3.1 with the documented duplication correction",
+  never "stock".
+- Driven by `bench/bench_video.py` via the `rocketride==1.3.0` SDK:
+  modes blast (one `send_files` batch — its native path), seq, c\<N\>.
+- Behavior to know: stores a copy of EVERY uploaded video in container
+  scratch, released ONLY by container removal (survives batch end and
+  `terminate()`); `use(threads=N)` is recorded but proven a no-op for
+  video utilization.
 
-Both arms perform the identical five steps on every video:
+**LangGraph** — `arms/langgraph/` → image `videobench-langgraph:v1`,
+container `videobench-langgraph`, HTTP port 8200.
+- FastAPI + LangGraph StateGraph, nodes mirroring the pipe 1:1:
+  frames (ffmpeg `fps=1/15`, lossless PNG) → detect (`rfdetr` RFDETRBase,
+  thr 0.3, engine-format JSON lines) → chunk
+  (RecursiveCharacterTextSplitter 4000/0) → embed
+  (multi-qa-MiniLM-L6-cos-v1, normalized) → assemble.
+- Endpoints: `POST /process` (multipart video → documents JSON with
+  per-node timings), `GET /health/ready` (warm-gated: models loaded AND
+  a synthetic frame pushed through the whole graph), `GET /meta`.
+- Driven by `bench/lg_driver.py` (same record schema as the RR driver):
+  modes seq, c\<N\> (no batch API — that asymmetry is documented, native
+  modes differ by design).
+- Cleans its temp file per request — no scratch accumulation.
+
+Shared: docker volume `rr-model-cache` (~9.4 GB: torch stacks, rfdetr
+checkpoint, MiniLM weights) mounted by BOTH arms — models download once
+per box, ever. **Critical model fact:** RocketRide's `miniLM` profile =
+`sentence-transformers/multi-qa-MiniLM-L6-cos-v1` (NOT all-MiniLM-L6-v2,
+which is its `miniAll`); wrong model passes every structural check and
+is silently incomparable (verified to 1.06e-07 against engine vectors).
+
+**Client** — `smoke/smoke.Dockerfile` → `videobench-smoke` (python
+3.12-slim + rocketride SDK + requests). Runs the drivers in its OWN
+container so client CPU/RSS never lands in the measured arm's cgroup and
+every video crosses a real network hop. Mounts: corpus read-only,
+`./results`, `./pipe`, `./bench`.
+
+## 3. The pipeline contract
+
+`pipe/benchmark_video_detect.pipe` (RocketRide executes this; LangGraph
+mirrors it stage-for-stage — parameters recovered byte-exactly from
+engine output):
+
+| stage | RR component | config |
+|---|---|---|
+| ingest | webhook (video lane) | file upload via SDK / HTTP |
+| frames | frame_grabber | interval profile, **15 s** (≈121 frames per 30-min video) |
+| detect | detect | **rfdetr**, threshold **0.3**, output: one JSON array per frame `[{"label","score","box":{x1,y1,x2,y2},"centroid":{x,y}}, …]` |
+| chunk | preprocessor_langchain | RecursiveCharacterTextSplitter, **4000 chars, 0 overlap** (frame lines joined by \n; dense rooms >4000 chars/line split mid-line — chunks are text windows, not valid JSON; both arms identical) |
+| embed | embedding_transformer `miniLM` | multi-qa-MiniLM-L6-cos-v1, **384-dim**, L2-normalized |
+| respond | response_documents | chunks + vectors back to client |
+
+`pipe/benchmark_video.pipe` is the dual-lane variant (+ faster-whisper
+transcription); it carries the known Whisper nondeterminism (R5) and is
+not the current benchmark pipe.
+
+## 4. Corpus
+
+| set | contents | where |
+|---|---|---|
+| `ami30test` | 30 muxed videos (3.6 GB), 23–37 min each | S3 + cached on box at `~/bench_corpus_ami30test` |
+| `ami_full` (staging pending) | all 170 usable AMI meetings, 99.5 h, ~24 GB | list: `corpus/sets/ami_full.txt`; durations: `corpus/sets/ami_full_durations.json`; stager: `run/stage_corpus.sh` (mirror→mux→S3, delete-as-you-go, resumable, ~1.5–2 h one-time) |
+
+Every corpus doc is one muxed file (AMI ships video and audio
+separately; `Closeup1.avi` + `Mix-Headset.wav` → ffmpeg stream-copy,
+bitexact). Manifests carry per-video `duration_s`; staged sets add
+per-file sha256 (feeds the `corpus_pin` gate). **Known metadata issue**
+(found by `frame_law`, 2026-08-21): some AMI recordings' video stream is
+longer/shorter than the audio (ES2008c, ES2011c) — staging will add
+ffprobe VIDEO durations to fix the expectation.
+
+## 5. How a run executes (current shape — no waves)
+
+With 1 TB, the whole corpus + engine scratch is <5% of disk, so each run
+is one straight pass. Reference: `run/headtohead.sh` (the shape of the
+2026-08-21 run):
 
 ```
-a 30-minute meeting video (~140 MB)
-  → take one snapshot frame every 15 seconds        (~120 frames)
-  → run an object detector on each frame            ("person", "chair", ...)
-  → write the detections as text, one line per frame
-  → cut that text into ~4,000-character chunks      (~20-130 per video)
-  → turn each chunk into a 384-number "embedding"   (for search)
-→ hand back the chunks + embeddings
+[1] corpus    S3 → ~/bench_corpus_ami30test if not cached (~25 s)
+[2] build     docker compose build rocketride langgraph smoke (cached: ~1 min)
+[3] ARM 1     compose up rocketride → healthcheck (port 5565)
+              → sampler starts: every 15 s, cgroup cpu_usage_usec,
+                memory.current, pids.current, memory.stat anon
+                → results/<run>/rr/engine_cgroup.csv
+              → client: bench_video.py /corpus rr-outdir N MODE WARM
+                (h2h: N=28, MODE=c6, WARM=2 — warm videos excluded)
+              → per_doc.jsonl + progress.jsonl written; container logs saved
+              → compose stop + rm  ← releases the engine's upload scratch
+[4] ARM 2     same, with langgraph (port 8200, healthcheck /health/ready)
+              and lg_driver.py — SAME videos, SAME order, SAME mode
+[5] report    python3 bench/report.py --arms rr lg → report.txt
+              (gates first, fail-closed; numbers stamped diagnostic on FAIL)
+[6] sync      aws s3 sync → videobench/<run>/ — ALSO ran every 60 s
+              throughout, so a crash loses ≤1 minute of records
 ```
 
-The details that make the two arms comparable were taken from
-RocketRide's own real output, so both produce the same *kind* and
-*amount* of work. We do not require the outputs to be byte-identical
-(the two arms use slightly different builds of the detector) — instead
-the correctness checks confirm the work is equivalent (see
-METRICS_EXPLAINED.md).
-
-## How a run happens, start to finish
-
-```
-laptop:  start the box  →  box pulls the latest code from git
-box:     1. get the corpus     S3 → a folder on the box's disk
-                               (skipped if already there from last time;
-                                ~25 seconds for 30 videos)
-         2. build/refresh the containers (cached: usually a minute)
-         3. ARM ONE (RocketRide):
-              - start the engine container, wait until it answers
-              - the client sends 2 practice videos first ("warm-up") —
-                these load the AI models into memory and are NOT counted
-              - the client then sends the measured videos (for example,
-                6 at a time until all 28 are done)
-              - meanwhile a small watcher notes, every 15 seconds, how
-                much processor and memory the engine is using
-              - when done: the engine container is deleted. This matters:
-                RocketRide keeps its own copy of every uploaded video and
-                only deleting the container gets that space back.
-         4. ARM TWO (LangGraph): exactly the same, same videos, same
-            order, same 6-at-a-time.
-         5. The report runs: correctness checks first, then the numbers.
-         6. Everything is uploaded to S3 — in fact it has been uploading
-            every 60 seconds all along, so even a crash loses nothing.
-laptop:  stop the box.
-```
-
-Only one arm ever runs at a time, so each gets the whole machine.
-
-## What lands in S3 for every run
-
-- `per_doc.jsonl` — one line per video: did it succeed, how many frames/
-  detections/chunks, fingerprints of every chunk and of the embeddings,
-  timings. This is the raw truth; every number in every report can be
-  recomputed from it forever, on any machine.
-- `progress.jsonl` — a line per video *as it finished* (live progress).
-- `engine_cgroup.csv` — the every-15-seconds processor/memory samples.
-- `driver.log`, `service.log` — what the client and the arm printed.
-- `report.txt` — the checks and numbers, computed at the end.
-
-## Reading the results
+Launch/observe/stop from the laptop:
 
 ```bash
-aws s3 cp --recursive s3://rocketride-benchmark-data/leela/videobench/<run>/ ./run --profile leela
-python3 bench/report.py ./run/rr                 # one arm
-python3 bench/report.py --arms ./run/rr ./run/lg # both, compared
+aws sso login --profile leela                      # if token expired
+bash aws_bench/local/box.sh start
+bash aws_bench/local/box.sh run  'cd ~/bench_langgraph_prod && git pull --ff-only origin aws-bench'
+bash aws_bench/local/box.sh launch h2h 'cd ~/bench_langgraph_prod/aws_videobench && bash run/headtohead.sh'
+bash aws_bench/local/box.sh tail h2h               # progress
+bash aws_bench/local/box.sh stop                   # ALWAYS
 ```
 
-The report always prints the correctness checks first. If any check
-fails, the numbers are labeled diagnostic-only. A single run also cannot
-prove repeatability (that needs the same run done at least twice), so
-one-off runs are labeled "sizing evidence", not benchmark results.
+Knobs (env): `N` (measured videos), `WARM` (excluded warm-ups), `MODE`
+(blast | seq | c\<N\>), `BENCH_TIMEOUT_S` (default 21600), `BENCH_PIPE`,
+`RR_THREADS` (recorded; proven no-op for video), `CORPUS_DIR`.
 
-## Why there are no waves anymore
+Measured phase timings (h2h, 28+2 videos/arm): RR arm ≈ 26 min
+(warm 118 s + span 1,433 s), LG arm ≈ 9 min (boot+warm + span 377 s),
+report <5 s. Whole run ≈ 40 min including builds.
 
-Earlier, the box had a 100 GB disk. Because RocketRide keeps a copy of
-every uploaded video until its container is deleted, a big run could
-fill the disk mid-flight (it happened once). The fix then was "waves":
-process a slice, delete the container, reclaim the space, repeat.
+## 6. Results layout (per run, in S3 and on-box `results/`)
 
-The disk is now 1 TB. The whole AMI corpus (24 GB) plus RocketRide's
-copies (another 24 GB) uses under 5% of it, so each run simply goes in
-one straight pass. The wave runner is kept for the day a corpus larger
-than the disk shows up (e.g. a 5,000-video campaign, whose engine copies
-alone would near 700 GB) and as a checkpointing tool for very long
-campaigns — but for AMI-sized work, nothing needs it.
+```
+h2h-<stamp>/
+  rr/  per_doc.jsonl      one record per video: ok, reason, input_sha256,
+                          size, duration_s, submit/completion ns, n_chunks,
+                          total_chars, n_frames_est, n_detections,
+                          chunk_sha256[], embedding_sha256, vector_dim,
+                          l2_norms_minmax, timing_source
+       + shot_meta line:  mode, span_s, ok_docs, measured_audio_s,
+                          offered_concurrency, threads_requested,
+                          pipe_sha256, provenance{}, envelope, warm stats
+  rr/  progress.jsonl     one line per video AS IT FINISHED
+  rr/  engine_cgroup.csv  ts,cpu_usage_usec,mem_current,pids,anon_bytes
+  rr/  driver.log, service.log
+  lg/  (same five, from lg_driver.py — identical schema)
+  report.txt              gates + V0–V5 (see METRICS_EXPLAINED.md)
+```
 
-## The traps worth knowing (all learned the hard way)
+Reanalyze anywhere, anytime:
+```bash
+aws s3 cp --recursive s3://rocketride-benchmark-data/leela/videobench/<run>/ ./run --profile leela
+python3 bench/report.py --arms ./run/rr ./run/lg
+```
 
-- Always start long runs detached (`nohup ... &`) — the box's terminal
-  sessions are short-lived, and the box auto-stops when it looks idle.
-- The `aws` command is invisible to background scripts unless called by
-  its full path — the scripts handle this; keep the pattern.
-- RocketRide's disk usage only shrinks when its container is DELETED —
-  stopping is not enough.
-- Laptop credentials expire every few hours (browser re-login); the
-  box's own credentials never do, so running jobs are never affected.
+## 7. Why no waves (and when they return)
+
+Waves (process a slice → delete the engine container → reclaim its
+scratch → next slice; `run/run_waves.sh`, S3→/dev/shm staging,
+resumable) existed because RocketRide's scratch retention could fill the
+old 100 GB disk mid-run — it did once (ENOSPC, 47/60 failed,
+2026-08-19). At 1 TB: AMI-scale runs (24 GB corpus + 24 GB scratch) run
+in one pass; waves remain the tool for corpora larger than disk (a
+5,000-video campaign ≈ 700 GB scratch) and for checkpointing multi-day
+campaigns (a crash costs one wave, not the campaign).
+
+## 8. Current status & what's left before quotable results
+
+Done: both arms built + box-verified; suite implemented + exercised
+cross-arm; S3 corpus architecture validated (158 MB/s pulls); 1 TB live;
+first head-to-head complete (see METRICS_EXPLAINED.md for numbers).
+
+Outstanding:
+1. **Envelope wiring** — shared BENCH_CPUSET, OMP_NUM_THREADS=1 on both
+   arms, one deadline, client pinned to its own cores (port from
+   aws_bench/docker-compose.yml). This is what makes runs *matched*.
+2. **≥3 reps per arm per mode** (determinism + CV gates require them).
+3. **seq runs** for both arms (true service latency + the cross-mode
+   speedup/parallel-efficiency block).
+4. **Full-corpus staging** (`run/stage_corpus.sh`, ~2 h) with ffprobe
+   video-durations added to the manifest.
+5. Optional probes: two-pipelines-in-one-engine, math-library threading
+   (see `findings/rocketride_cpu_utilization.md`).

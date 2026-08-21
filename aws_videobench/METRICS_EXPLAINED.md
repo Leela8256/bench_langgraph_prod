@@ -1,144 +1,149 @@
-# Metrics and Correctness, explained simply
+# Video Benchmark — Metrics & Correctness Reference (team status, 2026-08-21)
 
-The plain-language companion to `METRICS.md` (the terse spec) and to the
-code in `bench/metrics/`. Everything here is what the report actually
-prints, in the order it prints it, and why each item exists.
+The complete list of what the harness computes — every gate, every
+metric, its exact rule/formula, where the inputs come from, and the
+latest measured values (from the first head-to-head,
+`h2h-20260821T195300Z`: 28 videos / 14.51 h footage, mode c6, 32 cores
+unpinned, single rep — **sizing evidence, not final benchmark numbers**).
 
-One rule governs everything: **checks come first, numbers second.** If a
-correctness check fails, the numbers still print — but stamped as
-diagnostic-only, never quotable. And if something couldn't be measured,
-it shows as "None", never as zero: a broken run must never look like a
-fast one.
+Code: `bench/metrics/v0_gates.py` (gates), `bench/metrics/v_metrics.py`
+(numbers), `bench/report.py` (runner). Spec: `METRICS.md`.
+Global rule: anything uncomputable is `None` — never 0, never inf.
 
 ---
 
-## Part 1 — The correctness checks ("did the run actually do the work?")
+## V0 — Correctness gates (fail-closed; a FAIL makes numbers non-quotable)
 
-Run per arm, before any number is trusted:
+### Per arm
 
-**1. Census — did every video come back?**
-We sent 28 videos; we must get exactly 28 answers, each one matched to
-its video by name, none duplicated, none missing. A video that returns
-an empty answer counts as a failure, not as a fast success. Any failure
-is listed by name — nothing disappears silently.
+| gate | exact rule | status on h2h |
+|---|---|---|
+| `census` | records == manifest docs, matched by filename; no duplicates; no missing; `identity_ok` true on all; every failure named with its reason; empty output = failure | PASS 28/28 both arms |
+| `structure` | per ok video: n_chunks ≥ 1; every vector exactly 384-dim, finite; L2 norm within 1e-3 of 1.0; len(chunk_sha256) == n_chunks; mean chunk chars ≤ 4096 | PASS both arms |
+| `frame_law` | n_frames_est == ⌊duration_s/15⌋+1, tolerance ±1; plus detect-pipe bound n_chunks ≤ 1.5×frames+1 | **FAIL on 2 videos, both arms identically** — see finding below |
+| `self_duplication` | no duplicate chunk hashes within any video (repeat_factor == 1); needs no other arm; catches the RR 3.3.1 double-emit bug class | PASS both arms |
+| `corpus_pin` | per-video input_sha256 == manifest sha256 map; SKIP if manifest has no sha map | SKIP (ami30test has no sha map; staged `ami_full` will) |
+| `determinism` | ordered chunk_sha256 identical across reps on the same platform; also embedding_sha256 (sha256 over ordered vector bytes) when present; **single rep = FAIL by design** | FAIL (1 rep — expected; labels run as sizing) |
+| `metric_coverage` | every V1/V2/V3/V5 field non-null OR a named exemption; "not checked" can never read as "passed" | PASS both arms |
 
-**2. Structure — is each answer well-formed?**
-Every video must produce at least one chunk; every embedding must have
-exactly 384 numbers, all of them real (no infinities), each scaled to
-length 1.0 as the model promises; the chunk-count bookkeeping must be
-internally consistent; no chunk may exceed the splitter's size.
-This catches a wrong model, a broken load, or truncated output.
+**frame_law finding (new, 2026-08-21):** ES2008c (139 frames vs ~141
+expected) and ES2011c (114 vs ~108) failed identically on BOTH arms while
+`frame_parity` passed 28/28 — so the arms are correct and the **manifest
+duration is wrong for those videos**: AMI's video and audio streams have
+different lengths for some recordings (ES2011c's video runs ~90 s past
+its audio; our durations came from the audio/WAV header). Fix queued:
+record ffprobe VIDEO-stream duration in the manifest at staging time.
 
-**3. Frame law — did it really watch the whole video?**
-A 30-minute video sampled every 15 seconds must yield about 121 frames —
-simple arithmetic. If an arm reports meaningfully fewer, it silently
-skipped part of the video. We allow ±1 frame for rounding. There's also
-an upper sanity bound on chunks relative to frames, so runaway output
-gets caught too.
+### Cross-arm (replaces byte parity — decision 2026-08-20)
 
-**4. Self-duplication — did anything get counted twice?**
-No two chunks within a video may be identical. This exists because
-RocketRide 3.3.1 shipped a real bug that returned every result twice
-(inflating its "work done" by ~40% before we patched it). The check
-stays forever so a regression would be caught immediately, without
-needing the other arm to compare against.
+| gate | exact rule | h2h result |
+|---|---|---|
+| `input_identity` | per common video: input_sha256 equal (both arms ate the same bytes) | PASS 28/28 |
+| `frame_parity` | n_frames_est exactly equal per video (hard) | PASS 28/28 identical |
+| `detection_ratio` | per-video n_detections ratio; WARN outside 0.90–1.10 | PASS — all inside |
+| `chunk_ratio` | per-video n_chunks ratio; HARD fail outside 0.4–2.5; WARN outside 0.8–1.25 | PASS — all inside warn band |
+| `chunk_parity_tight` | per-video \|Δchunks\| ≤ 1 AND totals within 5% (haystack-suite rule; WARN-level here because our arms run different rfdetr builds) | WARN on 3 videos (±2 chunks: EN2002a 26v24, ES2010c 24v22, IB4002 138v140) |
+| `workload_ratio` | Σchunks(RR) ÷ Σchunks(LG), informational | ~1.02 (equal work) |
 
-**5. Corpus pin — were these the right videos?**
-Each video's fingerprint (a SHA-256, like a tamper-proof serial number)
-is compared to the corpus manifest. If a video changed since the corpus
-was built, the run fails — results from a drifted corpus are worthless.
+## V1 — Throughput (per mode, never blended across modes)
 
-**6. Determinism — does the same input give the same output?**
-The same video, run twice, must produce byte-for-byte identical chunks —
-and now also identical embedding fingerprints. A system that gives
-different answers each time can't be benchmarked. A single run can't
-prove this (there's nothing to compare against), so single runs
-automatically fail this check and get labeled "sizing evidence".
+| metric | formula | RR (h2h) | LG (h2h) |
+|---|---|---|---|
+| `x_realtime` (headline) | video_seconds ÷ span_s | **36.46** | **138.63** |
+| `videos_per_s` | ok docs ÷ span | 0.0195 | 0.0743 |
+| `chunks_per_s` | Σ chunks ÷ span | 0.731 | 2.736 |
+| `frames_per_s` | Σ frames ÷ span | 2.432 | 9.249 |
+| `chunks_per_video` | Σ chunks ÷ ok docs | 37.4 | 36.8 |
+| `frames_per_video` | Σ frames ÷ ok docs | 124.5 | 124.5 (identical) |
+| `realtime_streams_sustainable` | = x_realtime (live feeds the box could keep up with) | 36.5 | 138.6 |
+| `video_seconds` | Σ manifest durations (disclosed denominator, never probed at runtime) | 52,238.3 | 52,238.3 |
+| `span_s` | measured wall span, warm-up excluded | 1,432.78 | 376.81 |
 
-**7. Metric coverage — did we measure everything we claim to?**
-Every metric in the report must have a value, or a written reason why
-not (e.g. "thread counts don't apply in sequential mode"). This makes it
-impossible for "we didn't check" to quietly pass as "it was fine".
+## V2 — Latency (mode-labeled; percentiles are NEAREST-RANK, deterministic)
 
-**And across the two arms:**
-- **Input identity** — both arms ate byte-identical files.
-- **Frame parity** — both extracted exactly the same number of frames.
-- **Detection ratio** — detections within ±10% of each other (the arms
-  run slightly different detector builds, so tiny drift is expected and
-  flagged, not failed).
-- **Chunk ratio** — chunk counts per video within sane bounds (a hard
-  fail outside 0.4–2.5×: that would mean one arm did wholesale different
-  work). A stricter version (±1 chunk per video) is also reported as an
-  advisory.
-- **Workload ratio** — one number: total work of arm A ÷ arm B. 1.0
-  means perfectly equal work.
+Per-item modes (seq, c\<N\>):
 
-## Part 2 — The numbers ("how fast, how expensive?")
+| metric | formula | RR (c6) | LG (c6) |
+|---|---|---|---|
+| `service_latency_s` p50/p95/p99 | completion − submit per video, nearest-rank | 302.3 / 360.8 / 365.3 | 75.3 / 93.8 / 94.3 |
+| `latency_s_per_footage_min` | latency ÷ (duration/60), p50 | 9.82 | 2.36 |
+| `failed_items` | count of failed videos (counted, never averaged into latency) | 0 | 0 |
+| `time_to_first_result_s` (+ `_basis`) | first completed request; basis string states what was measured | 159.8 | 39.1 |
 
-**Speed (V1).** The headline is **× realtime**: how many hours of video
-get processed per hour of clock time. 36× means one hour of footage
-takes 100 seconds. Alongside it: videos/second, chunks/second,
-frames/second (chunks per video vary 10× by room, so we always show the
-work-based rates next to the video count), and "sustainable live
-streams" — how many live camera feeds this speed is equivalent to
-keeping up with.
+Batch mode (blast) instead reports: exact `batch_span_s`, completion
+curve p50/p90/last from client-observed events, TTFR with basis =
+"first client-observed completion within the batch", and an explicit
+refusal to claim per-doc service latency (batch position includes queue
+wait).
 
-**Response time (V2).** Reported strictly by how the videos were sent,
-because the meanings differ:
-- *One or a few at a time*: true per-video response times — the median,
-  the 95th percentile ("all but the slowest 5%"), and the 99th. Failures
-  are counted separately, never averaged in.
-- *Everything at once (batch)*: only the total batch time is exact. We
-  also show when the first result appeared and how completions spread
-  out — but we refuse to call those "response times", because a video
-  that sat in the queue for 40 minutes didn't take 40 minutes to process.
-  Every "time to first result" carries a note saying exactly what it
-  measured, because different systems' "first result" are not the same
-  thing.
+## V3 — Efficiency (work per resource — the fairest cross-arm numbers)
 
-**Efficiency (V3) — the fairest comparison numbers.** How much processor
-effort per unit of work: CPU-seconds per minute of footage (the primary
-one), per video, per frame, per detection, per chunk. Plus:
-- **effective cores** — of the 32 available, how many were actually busy
-  on average (measured from the operating system's own counters);
-- **threads activated** — how many threads the system *created*. The gap
-  between these two is a diagnostic in itself: RocketRide created ~1,000
-  threads and kept ~5 cores busy — lots of workers, little work.
+| metric | formula | RR (h2h) | LG (h2h) |
+|---|---|---|---|
+| `cpu_s_per_footage_min` (primary) | cpu_s ÷ footage minutes | **10.47** | **9.46** |
+| `cpu_s_per_video` | cpu_s ÷ ok docs | 325.4 | 294.1 |
+| `cpu_s_per_frame` | cpu_s ÷ Σ frames | 2.615 | 2.363 |
+| `cpu_s_per_detection` | cpu_s ÷ Σ detections | 0.566 | 0.513 |
+| `cpu_s_per_chunk` | cpu_s ÷ Σ chunks (continuity with the PDF suite) | 8.704 | 7.988 |
+| `effective_cores` / `achieved_parallelism` | Δcpu_usage ÷ Δt from cgroup counters | **5.45** | **19.47** |
+| `threads_activated` | max(pids) − baseline pids over the span | **998** | **225** |
+| `scaling_efficiency` | effective_cores ÷ allocated_cores (32) | 0.17 | 0.61 |
 
-**Memory & operations (V4).** Peak memory — now the *honest* version
-(the raw counter includes the operating system's file cache, which
-inflated it 5×; we record the corrected number too). Also: startup time
-until ready (excluded from all measurements, reported as an ops cost),
-and — for LangGraph only — a breakdown of where time goes (decoding vs
-detecting vs embedding). RocketRide can't be broken down that way (it's
-a black box inside), and that asymmetry is itself reported.
+Reading: **per-unit CPU is nearly equal (≤10% apart on every row)** —
+the arms are equally efficient per core-second. The entire 3.8×
+throughput gap is utilization: 5.45 vs 19.47 busy cores. RR spawns 4×
+the threads and keeps ⅓ of the cores busy — the engine's internal
+serialization, quantified. (threads=32 was already proven a no-op:
+5.59 cores. See `findings/rocketride_cpu_utilization.md`.)
 
-**Cost (V5).** Dollars per 1,000 hours of footage, straight from the
-machine's hourly price divided by the speed. And videos per day one box
-can handle.
+## V4 — Resources & operability
 
-**Comparing sending styles.** When the same arm is run both one-at-a-time
-and concurrently, we compute the speedup and "parallel efficiency" —
-how close it got to perfect scaling (6 at a time should ideally be 6×
-faster; the shortfall is the interesting part).
+| metric | source | notes / latest |
+|---|---|---|
+| peak memory (raw) | cgroup memory.current max | includes page cache — inflates ~5× |
+| peak RSS (corrected) | cgroup memory.stat `anon` max | RR ~4.1 GB, LG ~2.8 GB mid-run |
+| `cold_to_ready_s` | warm-up span, excluded from measurement | RR 118.2 s (2 videos); LG warm gate at boot |
+| `lg_stage_split` | Σ per-node timings (LG only) | decode ~55%, detect ~40%, embed ~5% |
+| `lg_framework_overhead_s` | e2e − Σ node timings (the "framework tax") | reported per run |
+| RR stage split | — | not decomposable (closed engine); the asymmetry itself is reported |
+| storage amplification | engine bytes written ÷ input bytes | RR ≈ 1.0× retained until container removal; LG ≈ 0 (tempfile per request) |
 
-## Where this suite came from
+## V5 — Cost
 
-Built for the PDF benchmark, extended for video, then cross-checked
-against the sibling Haystack benchmark's implemented suite
-(`VIDEO-METRICS-IMPLEMENTED.md`) — everything useful from theirs was
-adopted on 2026-08-21 (deterministic percentiles, thread accounting,
-coverage gate, corpus pin, basis notes, and more). What neither suite
-measures yet is also written down (network bytes per video, memory
-growth vs video length, crash-recovery behavior), so nobody mistakes
-the suite for covering them.
+| metric | formula | RR | LG |
+|---|---|---|---|
+| `usd_per_1k_footage_hours` | $/h ÷ x_realtime × 1000 (c7i.8xlarge $1.428/h) | **$39.17** | **$10.30** |
+| `videos_per_day_per_box` | x_realtime × 48 (30-min videos) | 1,750 | 6,654 |
 
-## Where the code lives
+## Cross-mode (same arm, seq + concurrent runs available)
 
-- `bench/metrics/v0_gates.py` — every correctness check above.
-- `bench/metrics/v_metrics.py` — every number above.
-- `bench/report.py` — runs checks, then numbers, prints the verdict,
-  and exits with an error code if any hard check failed.
+| metric | formula |
+|---|---|
+| `speedup_<mode>_over_seq` | chunks_per_s(mode) ÷ chunks_per_s(seq) — ratio of ratios, immune to unequal worker grants |
+| `parallel_efficiency` | speedup ÷ offered concurrency; meaningful only when docs ≥ concurrency |
 
-All three work on the saved records alone — download any run from S3 and
-recompute everything on a laptop, years later, and get the same answers.
+Not yet exercised (needs a seq run of each arm — queued for the matched campaign).
+
+## Provenance recorded in every run's shot_meta
+
+`pipe_sha256`, pipeline_kind (detect), interval_s 15, detect_model rfdetr
++ threshold 0.3, embed_model multi-qa-MiniLM-L6-cos-v1, split 4000/0,
+expect_dim 384, mode, offered_concurrency, threads_requested,
+warm_docs/warm_s, timeout_s, envelope string, arm id.
+
+## Known not-implemented (do not present the suite as covering these)
+
+Bytes-over-network per video · transport-vs-processing split ·
+peak-RSS-vs-video-length slope · max-concurrent-before-OOM ·
+blast-radius / recovery behavior · toil accounting. (Same gap the
+haystack suite discloses in its §8.)
+
+## Status summary
+
+- Suite fully implemented and exercised end-to-end on real cross-arm
+  data (h2h-20260821T195300Z). All incorporations from
+  `VIDEO-METRICS-IMPLEMENTED.md` landed 2026-08-21.
+- Outstanding before quotable results: the matched enveloped run
+  (BENCH_CPUSET + OMP=1 + one deadline), ≥3 reps per arm/mode, seq runs
+  for the cross-mode block, ffprobe video-durations in the staged
+  manifest (fixes the frame_law corpus finding), full-corpus staging.
