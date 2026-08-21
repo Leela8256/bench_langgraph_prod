@@ -191,6 +191,21 @@ PY
 cd "$DEST"
 sha256sum *.avi > SHA256SUMS
 sha256sum -c --quiet SHA256SUMS
+# Embed the sha map into the manifest so the corpus_pin gate can verify
+# every run's input bytes against the pinned corpus (added 2026-08-21).
+python3 - <<'PY'
+import json, pathlib
+mf = pathlib.Path("corpus_manifest.json")
+m = json.loads(mf.read_text())
+shas = {}
+for line in open("SHA256SUMS"):
+    h, name = line.split(None, 1)
+    name = name.strip().lstrip("*")
+    shas[name] = {"sha256": h, "bytes": pathlib.Path(name).stat().st_size}
+m["sha256"] = shas
+mf.write_text(json.dumps(m, indent=1))
+print(f"manifest: sha256 map embedded for {len(shas)} files")
+PY
 echo
 echo "corpus ready: $DEST"
 echo "  docs      : $(ls -1 ./*.avi | wc -l | tr -d ' ')"
