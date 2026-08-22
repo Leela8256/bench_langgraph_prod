@@ -13,6 +13,33 @@ Raw records (every number re-derivable forever):
   ingestion path (RR: one blast batch; LG: all 60 requests at t=0) →
   `s3://rocketride-benchmark-data/leela/videobench/native60-20260821T210828Z/`
 
+- **Run C — "full corpus"** (2026-08-22, overnight): all 168 usable measured
+  AMI meetings + 2 warm / 98.19 h — RR blast vs LG c32, unpinned, 1 rep →
+  `s3://rocketride-benchmark-data/leela/videobench/native170-20260822T070136Z/`
+
+### Run C headline (full corpus, 98.19 h)
+
+| | RocketRide (blast) | LangGraph (c32) | gap |
+|---|---|---|---|
+| span | 2.62 h | **37.9 min** | **4.16×** |
+| x_realtime | 37.43 | **155.65** | 4.16× |
+| effective cores | 5.98 | **26.84** (84%) | 4.5× |
+| threads activated | 4,049 | 2,932 | — |
+| cpu_s per footage-min | **9.91** (its best) | 10.66 | ~tie (7.5%) |
+| cost per 1k footage-hours | $38.15 | **$9.17** | 4.16× |
+| workload ratio | — | — | 1.024 (equal work) |
+| census / frame_parity | 168/168 both | 168/168 identical | — |
+
+Run C gate news: **corpus_pin PASSED for the first time** (168 docs vs
+pinned shas, both arms); the A/V-duration frame_law failures are GONE
+(the ffprobe video-duration fix worked — ES2008c/ES2011c/IS1000a no
+longer flagged). One new calibration item: the chunk-upper-bound clause
+(chunks ≤ 1.5×frames+1, borrowed from the haystack suite) trips on 4–5
+ultra-dense IN/IS videos (IN1007: 294 chunks / 160 frames = 1.84×) —
+identically on both arms, so it is a workload property of the densest
+Idiap rooms, not a defect; the bound needs raising (~3×) or replacing
+with a chars-based bound. determinism: FAIL by design (single rep).
+
 ---
 
 ## Scoreboard — who wins what
