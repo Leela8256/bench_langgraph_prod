@@ -28,6 +28,7 @@ TIMEOUT_S = int(os.environ.get("BENCH_TIMEOUT_S", "21600"))
 EMBED_DIM = 384
 POOL_MAX = int(os.environ.get("RR_POOL_MAX", "0")) or 10 ** 9
 ARM = "rocketride-docker-3.3.1-video"
+VIDEO_DURS: dict = {}
 
 
 def documents_from(result):
@@ -66,7 +67,8 @@ def base_record(video, durations):
     return {"doc": video.name, "arm": ARM, "ok": False,
             "input_sha256": hashlib.sha256(video.read_bytes()).hexdigest(),
             "size_bytes": video.stat().st_size,
-            "duration_s": durations.get(video.name)}
+            "duration_s": durations.get(video.name),
+            "video_duration_s": VIDEO_DURS.get(video.name)}
 
 
 def embedding_digest(docs):
@@ -165,15 +167,24 @@ async def main():
         raise SystemExit(f"no videos in {corpus_dir}")
     out.mkdir(parents=True, exist_ok=True)
 
-    durations = {}
+    durations, corpus_shas, video_durs = {}, {}, {}
     mf = corpus_dir / "corpus_manifest.json"
     if mf.exists():
-        durations = json.loads(mf.read_text()).get("duration_s", {})
+        _m = json.loads(mf.read_text())
+        durations = _m.get("duration_s", {})
+        corpus_shas = _m.get("sha256", {})
+        video_durs = _m.get("video_duration_s", {})
+        VIDEO_DURS.update(video_durs)
     measured_audio_s = sum(durations.get(v.name) or 0 for v in corpus)
 
     (out / "manifest.json").write_text(json.dumps(
         {"docs": [v.name for v in corpus], "n": len(corpus),
-         "measured_audio_s": measured_audio_s}))
+         "measured_audio_s": measured_audio_s,
+         # sha map from the corpus manifest -> the corpus_pin gate verifies
+         "sha256": {v.name: corpus_shas[v.name]
+                    for v in corpus if v.name in corpus_shas},
+         "video_duration_s": {v.name: video_durs[v.name]
+                              for v in corpus if v.name in video_durs}}))
 
     pipe = json.loads(PIPE_SRC.read_text())
     pipe["project_id"] = str(uuid.uuid4())

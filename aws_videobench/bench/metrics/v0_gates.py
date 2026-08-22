@@ -77,11 +77,12 @@ def frame_law(records):
     for r in records:
         if not r.get("ok"):
             continue
-        if r.get("n_frames_est") is None or not r.get("duration_s"):
+        dur = r.get("video_duration_s") or r.get("duration_s")
+        if r.get("n_frames_est") is None or not dur:
             missing += 1
             continue
         checked += 1
-        expect = int(r["duration_s"] // FRAME_INTERVAL_S) + 1
+        expect = int(dur // FRAME_INTERVAL_S) + 1
         if abs(r["n_frames_est"] - expect) > 1:
             problems.append(f"{r['doc']}: {r['n_frames_est']} frames, expected ~{expect}")
         # detect-pipe bound (haystack-suite interval probe): chunks track
