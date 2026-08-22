@@ -161,7 +161,8 @@ async def main():
     mode = sys.argv[4] if len(sys.argv) > 4 else "blast"
     warm_docs = int(sys.argv[5]) if len(sys.argv) > 5 else 0
 
-    all_videos = sorted(corpus_dir.glob("*.avi"))
+    all_videos = sorted(list(corpus_dir.glob("*.avi"))
+                     + list(corpus_dir.glob("*.mp4")))
     corpus = all_videos[:n]
     if not corpus:
         raise SystemExit(f"no videos in {corpus_dir}")
