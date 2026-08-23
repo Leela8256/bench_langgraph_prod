@@ -110,6 +110,7 @@ def census_item(args):
         "id": ident, "downloads": downloads,
         "title": md.get("title", ident),
         "year": md.get("year") or md.get("date", ""),
+        "license": md.get("licenseurl", ""),
         "collections": colls if isinstance(colls, list) else [colls],
         **({"video": best} if best else {"no_mp4": True}),
     }
@@ -123,7 +124,11 @@ def run_census():
             except json.JSONDecodeError:
                 pass
     items = [(i, d) for i, d in enumerate_items() if i not in done]
-    print(f"census: {len(done)} already done, {len(items)} to fetch")
+    # downloads-descending: selection is top-N-by-downloads, so once the
+    # censused set covers N eligible + reserves, --select-only is provably
+    # identical to a full census — no need to wait 8h for the tail.
+    items.sort(key=lambda x: -(x[1] or 0))
+    print(f"census: {len(done)} already done, {len(items)} to fetch (downloads-desc)")
     with open(CENSUS, "a") as out, ThreadPoolExecutor(12) as ex:
         for n, rec in enumerate(ex.map(census_item, items), 1):
             out.write(json.dumps(rec) + "\n")

@@ -7,8 +7,11 @@ dataset is, exact sizes and hours, how it gets into S3, every check
 along the way, what the 10-film smoke proved, and current status.
 
 Status (2026-08-22): **10-film smoke set staged and benchmarked** (both
-arms 8/8, run `archive10-20260822T190711Z`); **full-collection census
-in flight**; 500-film staging queued behind the pin.
+arms 8/8, run `archive10-20260822T190711Z`). **Staging is now
+census-independent (JIT design)**: a deterministic 1,500-candidate queue
+is pinned in git and the JIT stager (§4) walks it — fetching metadata
+just-in-time, gating, staging — until 500 films succeed, then freezes the
+corpus. The full-collection census still runs, demoted to EDA only.
 
 ---
 
@@ -30,25 +33,32 @@ https://archive.org/details/feature_films
 
 | quantity | value | basis |
 |---|---|---|
-| films | 500 (top-downloads of the eligible pool) | pin from census |
+| films | 500 = the first queue candidates to pass every gate | deterministic queue (downloads desc, identifier asc) |
 | footage | **≈ 700 hours** (median ~82 min/film) | duration profile |
 | bytes in S3 | **≈ 300 GB** | ~0.4 GB/h × derivative sizes (10-film smoke: 5.5 GB for 13.3 h — extrapolates to ~290 GB) |
 | S3 cost | **≈ $7/month** | 300 GB × $0.023 |
 | staging wall time | **~10–16 h (one overnight)** | archive.org at 5–20 MB/s, sequential |
 | box cost to stage | ~$15–25 | c7i.8xlarge $1.43/h |
 
-### Eligibility filters (applied at census, in this order)
+### Acceptance gates (JIT, applied per candidate in queue order)
 
-1. `mediatype:movies` (drops subcollection entries)
-2. not dark (metadata present with files)
-3. duration **60–240 min** (1-hour-plus requirement; cap keeps a 10-hour
-   outlier from distorting wave sizing)
-4. has an `h.264` (preferred) or `MPEG4` `.mp4` derivative with a
-   `length` field
-5. **not in `silent_films`** (dual-lane needs speech)
-6. **deduped by normalized title** (the collection has re-uploads)
-7. rank by all-time downloads (popularity ≈ print-quality proxy;
-   snapshot recorded), take top N
+1. item metadata resolves with files (dark items rejected)
+2. **explicit license allowlist** — CC family + public-domain marks
+   (`creativecommons.org/` `publicdomain/mark`, `publicdomain/zero`,
+   `licenses/publicdomain`, `licenses/by*`); an item with NO license
+   metadata is **rejected, never assumed PD**
+3. source-reported duration **60–240 min** (1-hour-plus requirement; cap
+   keeps a 10-hour outlier from distorting run sizing)
+4. a **deterministic MP4 derivative** pick exists (h.264 > MPEG4 > 512Kb
+   MPEG4; ties broken by longer length, then larger size, then name)
+5. **dedup vs already-accepted**: normalized title AND duration within
+   max(120 s, 2%) — re-uploads collapse, remakes with different runtimes
+   survive
+6. post-download: **probe-corroborated duration** — ffmpeg-probed video
+   stream within max(300 s, 10%) of source-reported (catches broken
+   metadata and truncated downloads)
+7. **no audio requirement** — the benchmark pipe is detect-only; audio
+   presence is recorded per film, informational only
 
 ## 2. What the 10-film smoke proved (run `archive10-20260822T190711Z`)
 
@@ -71,42 +81,68 @@ https://archive.org/details/feature_films
 
 ## 3. The corpus contract
 
-One corpus doc = one film = `<identifier>.mp4` in
-`s3://rocketride-benchmark-data/leela/corpus/archive_films/`.
+One corpus doc = one film = `<identifier>.mp4` in the **provisional
+versioned prefix**
+`s3://rocketride-benchmark-data/leela/corpus/archive_films_v2/`
+(the 10-film smoke set stays untouched at `corpus/archive_films/`).
 
-**The pin is the corpus definition**, committed to git:
-- `corpus/sets/archive_films.txt` — `identifier<TAB>filename`, one per film
-- `corpus/sets/archive_films_durations.json` — census durations
+**The queue is the selection order; the freeze is the corpus definition.**
+Committed to git:
+- `corpus/sets/archive_films_queue.txt` — top 1,500 by (downloads desc,
+  identifier asc), downloads snapshot in the header
+- after the freeze: **nested subsets** `archive_films_10.txt` ⊂
+  `archive_films_100.txt` ⊂ `archive_films_500.txt` (prefixes of
+  acceptance order — every run scale uses a subset of the same corpus)
+  + `archive_films_500_durations.json`
 
-**The manifest** (built at staging, uploaded beside the videos) carries,
-per film:
+**The journal** (`~/stage_films_v2_journal.jsonl` on the box) records
+EVERY decision — one line per candidate, accepted or rejected with
+reason — and is the resume state.
+
+**The frozen manifest** (`corpus_manifest.json`, sealed by its own sha in
+`corpus_manifest.sha256` beside it) carries, per film:
 
 | field | source | feeds |
 |---|---|---|
-| `duration_s` | census metadata | the footage denominator (x_realtime, cpu_s_per_footage_min) |
+| `duration_s` | source metadata | the footage denominator (x_realtime, cpu_s_per_footage_min) |
 | `video_duration_s` | ffmpeg null-mux probe | the frame_law denominator (A/V and container clocks disagree — the AMI lesson) |
-| `sha256` + `bytes` | staging | the corpus_pin gate; content identity forever |
+| `sha256` + `bytes` | staging, before upload | the corpus_pin gate; content identity forever |
 | `frames_counted` + `nominal_fps` | same probe pass | VFR diagnostics (the films lesson) |
-| `skipped_no_audio` list | staging audio gate | explains any staged-count shortfall vs the pinned N |
+| `license` | item metadata | per-film provenance (explicit allowlist) |
+| `has_audio` | probe, informational | dual-lane optionality; no gate |
 
-## 4. The staging pipeline (mirror of the AMI v2 discipline)
+## 4. The staging pipeline (JIT, census-independent)
 
-`run/stage_archive_films.sh`, ON THE BOX (direct archive.org → box → S3;
-nothing routes through the laptop):
+`run/stage_films_jit.sh` → `stage_films_jit.py` + `freeze_films.py`, ON
+THE BOX (direct archive.org → box → S3; nothing routes through the
+laptop). No pre-built film list: the stager walks the committed queue and
+decides each candidate just-in-time.
 
 ```
-for each (identifier, filename) in the pin:
-  skip     if already in S3 AND probed          (resume state: sha journal + S3 listing)
-  fetch    S3 copy if staged, else curl from archive.org
-           (302 → datanode, retries, ~5–20 MB/s, SEQUENTIAL — politeness)
-  gate     audio stream MUST exist (ffprobe, ffmpeg-stderr fallback)
-           → silent prints SKIPPED and logged, never staged
-  probe    one ffmpeg null-mux pass → video_duration_s + frames_counted + nominal_fps
-  record   sha256 + bytes + probe fields → journal
-  upload   aws s3 cp → S3
-  clean    delete local copy                     (peak disk = ONE film, <4 GB)
-then: manifest (durations + shas + fps probe + skip list) → S3
+for each identifier in archive_films_queue.txt (downloads desc, id asc):
+  stop     when 500 accepted
+  skip     if already journaled (resume state = the journal itself)
+  fetch    item metadata just-in-time (archive.org /metadata)
+  gate     license allowlist → duration 60–240 min → deterministic mp4
+           pick → title+duration dedup            (rejects cost ~1 s, no bytes)
+  download curl from archive.org (302 → datanode, retries, ~5–20 MB/s,
+           SEQUENTIAL — politeness)
+  probe    one ffmpeg null-mux pass → video_duration_s + frames_counted +
+           nominal_fps + has_audio(informational)
+  gate     probed duration corroborates source-reported (10% / 300 s)
+  record   sha256 + bytes BEFORE upload → journal
+  upload   aws s3 cp → provisional prefix; byte size verified via head-object
+  clean    delete local copy                     (peak disk = ONE film, <8 GB)
+then freeze (freeze_films.py, automatic at 500):
+  verify   EVERY S3 object against journaled bytes (head-object, no re-download)
+  seal     manifest → S3 + its own sha256 beside it
+  pin      nested subsets 10 ⊂ 100 ⊂ 500 + durations → corpus/sets/ + S3
+           (fetched to the laptop and committed — the commit is the freeze)
 ```
+
+If the 1,500-queue exhausts before 500 accepted (exit 3), extend it:
+`make_films_queue.py --q 3000` and relaunch — journaled candidates are
+skipped, so the extension only appends new work.
 
 Operational hardening (each from a real incident):
 - **Keepalive**: a one-core busy loop runs for the stager's lifetime —
@@ -124,27 +160,30 @@ Launch:
 bash aws_bench/local/box.sh start
 bash aws_bench/local/box.sh run 'cd ~/bench_langgraph_prod && git pull --ff-only origin aws-bench'
 bash aws_bench/local/box.sh launch stagefilms \
-  'cd ~/bench_langgraph_prod/aws_videobench && bash run/stage_archive_films.sh'
-bash aws_bench/local/box.sh tail stagefilms       # progress: "staged <id>.mp4 (n/500 ...)"
+  'cd ~/bench_langgraph_prod/aws_videobench && bash run/stage_films_jit.sh'
+bash aws_bench/local/box.sh tail stagefilms   # "ACCEPT <id>.mp4 (n/500 ...)" / "REJECT <id> (reason)"
 ```
+
+(`run/stage_archive_films.sh` remains for the 10-film smoke prefix; new
+staging goes through the JIT path.)
 
 ## 5. Checks — before, during, and after
 
-**At census/pin (before any video byte):** eligibility filters (§1),
-dark-item skip, dedupe; the script prints filtered-out counts and the
-eligible-pool size so the real census is visible before staging.
+**Before any video byte (per candidate, JIT):** metadata resolves;
+explicit license allowlist; source duration window; deterministic mp4
+pick; title+duration dedup — every rejection journaled with its reason,
+so the acceptance funnel is fully auditable afterwards
+(`tallies: {...}` in the log summarizes it live).
 
-**At staging (per film):** audio-stream gate; download integrity (curl
-`-f` + retries); probe sanity (duration parses, frames counted); sha
-recorded before upload.
+**At staging (per film):** download integrity (curl `-f` + retries);
+probe sanity (decode rc, duration parses, frames counted); probed
+duration corroborates metadata (10% / 300 s); sha recorded before
+upload; upload byte-verified via head-object.
 
-**After staging (verification):**
-```bash
-aws s3 ls s3://rocketride-benchmark-data/leela/corpus/archive_films/ --profile leela | grep -c '.mp4$'
-# == manifest n_docs (+ skipped_no_audio explains any shortfall vs 500)
-aws s3 cp s3://.../archive_films/corpus_manifest.json - --profile leela | python3 -m json.tool | head -30
-# spot-check 2–3 shas against fresh downloads; ffprobe 2–3 files (1 video + 1 audio stream)
-```
+**At freeze (automatic at 500):** every one of the 500 S3 objects
+re-verified against journaled bytes; manifest sealed with its own
+sha256; nested subsets emitted. Freeze refuses to run on a shortfall or
+any verification miss.
 
 **At benchmark time (the V0 suite, with the films-driven recalibrations
 of 2026-08-22 — validated against all three existing run datasets):**
@@ -175,22 +214,25 @@ of 2026-08-22 — validated against all three existing run datasets):**
 
 | thing | location |
 |---|---|
-| census (full-collection EDA) | `corpus/census_archive_films.jsonl` |
-| pin (the corpus definition) | `corpus/sets/archive_films.txt` + `archive_films_durations.json` |
-| census/selection script | `corpus/census_archive_films.py` (`--n 500`, `--census-only`, `--select-only`) |
-| stager | `run/stage_archive_films.sh` |
-| canonical corpus | `s3://rocketride-benchmark-data/leela/corpus/archive_films/` (+ manifest) |
-| smoke runner / results | `run/archive10.sh` / `s3://…/videobench/archive10-20260822T190711Z/` |
-| resume state (box) | `~/stage_films_shas.jsonl` + the S3 listing |
+| candidate queue (the selection order) | `corpus/sets/archive_films_queue.txt` |
+| queue generator | `corpus/make_films_queue.py` (`--q 1500`) |
+| JIT stager + freeze | `run/stage_films_jit.sh` → `stage_films_jit.py` + `freeze_films.py` (`--dry-run N` for gate preview) |
+| decision journal (resume state, box) | `~/stage_films_v2_journal.jsonl` |
+| canonical corpus (provisional → frozen) | `s3://rocketride-benchmark-data/leela/corpus/archive_films_v2/` (+ `corpus_manifest.json` + `.sha256` + `pins/`) |
+| frozen pins (after freeze) | `corpus/sets/archive_films_{10,100,500}.txt` + `archive_films_500_durations.json` |
+| census (EDA only, non-blocking) | `corpus/census_archive_films.jsonl` ← `census_archive_films.py` |
+| 10-film smoke set / results | `corpus/archive_films/` (S3) + `run/archive10.sh` / `s3://…/videobench/archive10-20260822T190711Z/` |
 | box control (laptop) | `aws_bench/local/box.sh` |
 
 ## 8. Known traps (all encountered or engineered against)
 
 1. **Dark items** — metadata without files; census flags, selection skips.
 2. **Subcollections in search results** — filtered by `mediatype:movies`.
-3. **Silent films** — double-gated (census collection filter + staging
-   audio probe); skips logged in the manifest.
-4. **Re-uploads/duplicates** — title-level dedupe; remakes deliberately kept.
+3. **Silent films** — no longer gated: the benchmark pipe is detect-only,
+   so audio is not required; presence recorded per film (informational)
+   to keep dual-lane optionality.
+4. **Re-uploads/duplicates** — normalized title + duration proximity
+   (max(120 s, 2%)); remakes with different runtimes deliberately kept.
 5. **VFR/odd timestamps in old prints** — the measured +≤6% RR
    over-sampling; gates banded, fps probe recorded per film (§5).
 6. **Politeness to archive.org** — sequential downloads, retries with
@@ -198,15 +240,19 @@ of 2026-08-22 — validated against all three existing run datasets):**
 7. **Idle watchdog vs network-bound staging** — keepalive core (§4);
    nohup-detach always; resume makes any stop free.
 8. **`aws` PATH in nohup shells** — absolute path in every script.
-9. **Licensing** — PD/CC content, private bucket, internal benchmarking;
-   identifiers in the manifest keep provenance traceable.
+9. **Licensing** — per-item EXPLICIT allowlist (CC family + PD marks);
+   items without license metadata are rejected, never assumed PD; the
+   exact license URL is journaled and frozen into the manifest per film.
 
 ## 9. Timeline to a benchmark-ready 500-film corpus
 
 | phase | duration | where |
 |---|---|---|
-| census (in flight) | ~45 min | laptop, metadata only |
-| pin top-500 + commit | minutes | laptop |
-| staging | ~10–16 h, one overnight | box (keepalive on, resumable) |
-| verification | ~10 min | laptop |
-| **total** | **~1 day, mostly unattended** | |
+| queue generation + commit | ~5 min (done) | laptop, one scrape pass |
+| JIT staging until 500 accepted | ~10–16 h, one overnight | box (keepalive on, journal-resumable) |
+| freeze: verify 500 objects + seal manifest + subsets | ~5 min, automatic | box |
+| fetch pins + commit (the freeze lands in git) | minutes | laptop |
+| **total** | **one overnight, unattended** | |
+
+The census no longer appears in this table — it runs in parallel for EDA
+and stratification analysis, and nothing in staging waits on it.
