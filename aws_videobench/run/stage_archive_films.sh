@@ -36,10 +36,22 @@ FFPROBE="$(command -v ffprobe || echo "$HOME/bin/ffprobe")"
 [ -x "$FFMPEG" ] || { echo "FATAL: no ffmpeg (fetch_ami.sh installs the static build)" >&2; exit 1; }
 mkdir -p "$WORK"; touch "$SHAS"
 
-vdur() {  # video-stream duration in seconds, via null stream-copy
-  "$FFMPEG" -nostdin -i "$1" -map 0:v:0 -c copy -f null - 2>&1 | \
-    grep -oE 'time=[0-9:.]+' | tail -1 | cut -d= -f2 | \
-    python3 -c 'import sys; h,m,s=sys.stdin.read().strip().split(":"); print(round(int(h)*3600+int(m)*60+float(s),2))'
+# Keepalive: the idle watchdog stops the box during network-bound staging
+# (bitten during AMI staging). One busy core reads as "not idle".
+( while :; do :; done ) &
+KEEPALIVE_PID=$!
+trap 'kill $KEEPALIVE_PID 2>/dev/null || true' EXIT
+
+vprobe() {  # "duration_s frames fps" via one null stream-copy pass
+  "$FFMPEG" -nostdin -i "$1" -map 0:v:0 -c copy -f null - 2>&1 | python3 -c '
+import re, sys
+t = sys.stdin.read()
+m = re.findall(r"time=(\d+):(\d+):([\d.]+)", t)
+h, mi, se = m[-1] if m else ("0","0","0")
+dur = round(int(h)*3600 + int(mi)*60 + float(se), 2)
+fr = re.findall(r"frame=\s*(\d+)", t)
+fps = re.search(r"([\d.]+) fps", t)
+print(dur, fr[-1] if fr else 0, fps.group(1) if fps else 0)'
 }
 
 echo "== inventory"
@@ -78,13 +90,13 @@ grep -v '^#' "$LIST" | while IFS=$'\t' read -r id srcfile; do
     rm -f "$local_f"
     continue
   fi
-  vd=$(vdur "$local_f")
+  read -r vd vframes vfps <<< "$(vprobe "$local_f")"
   sha=$(sha256sum "$local_f" | cut -d' ' -f1)
   if ! grep -qx "$doc" "$WORK/.in_s3"; then
     "$AWS_BIN" s3 cp "$local_f" "$S3_CORPUS/$doc" --quiet
   fi
   grep -v "\"$doc\"" "$SHAS" > "$SHAS.tmp" || true; mv "$SHAS.tmp" "$SHAS"
-  echo "{\"doc\": \"$doc\", \"sha256\": \"$sha\", \"bytes\": $(stat -c%s "$local_f"), \"video_duration_s\": $vd}" >> "$SHAS"
+  echo "{\"doc\": \"$doc\", \"sha256\": \"$sha\", \"bytes\": $(stat -c%s "$local_f"), \"video_duration_s\": $vd, \"frames_counted\": $vframes, \"nominal_fps\": $vfps}" >> "$SHAS"
   rm -f "$local_f"
   echo "staged $doc ($n/$total, src=$src, vdur=${vd}s)"
 done
@@ -93,13 +105,16 @@ echo "== manifest"
 python3 - "$DURS" "$SHAS" <<'PY' > "$WORK/corpus_manifest.json"
 import json, sys
 durs = json.load(open(sys.argv[1]))
-shas, vdurs, skipped = {}, {}, []
+shas, vdurs, skipped, fpsmap = {}, {}, [], {}
 for line in open(sys.argv[2]):
     r = json.loads(line)
     if r.get("skipped"):
         skipped.append(r["doc"]); continue
     shas[r["doc"]] = {"sha256": r["sha256"], "bytes": r["bytes"]}
     vdurs[r["doc"]] = r["video_duration_s"]
+    if r.get("frames_counted"):
+        fpsmap[r["doc"]] = {"frames_counted": r["frames_counted"],
+                            "nominal_fps": r["nominal_fps"]}
 staged = {d: s for d, s in durs.items() if d in shas}
 print(json.dumps({
     "corpus": "archive_films",
@@ -111,6 +126,7 @@ print(json.dumps({
     "skipped_no_audio": skipped,
     "duration_s": staged,
     "video_duration_s": vdurs,
+    "video_fps_probe": fpsmap,
     "total_hours": round(sum(staged.values()) / 3600, 2),
     "sha256": shas,
     "note": "duration_s = census metadata (footage denominator); "

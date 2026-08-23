@@ -40,7 +40,7 @@ sampler() {  # $1 container, $2 csv
   echo $!
 }
 
-echo "== [1/6] corpus: ami_full from S3"
+echo "== [1/6] corpus: archive_films from S3"
 s3_have=$("$AWS_BIN" s3 ls "$S3_CORPUS/" | grep -c '\.mp4$' || true)
 [ "$s3_have" -ge "$EXPECT" ] || { echo "FATAL: only $s3_have/$EXPECT staged — run stage_corpus.sh first" >&2; exit 1; }
 have=$(find "$CORPUS_DIR" -name '*.mp4' | wc -l | tr -d ' ')
