@@ -6,12 +6,17 @@ discipline as the AMI corpus. This is the definitive plan: what the
 dataset is, exact sizes and hours, how it gets into S3, every check
 along the way, what the 10-film smoke proved, and current status.
 
-Status (2026-08-22): **10-film smoke set staged and benchmarked** (both
-arms 8/8, run `archive10-20260822T190711Z`). **Staging is now
-census-independent (JIT design)**: a deterministic 1,500-candidate queue
-is pinned in git and the JIT stager (§4) walks it — fetching metadata
-just-in-time, gating, staging — until 500 films succeed, then freezes the
-corpus. The full-collection census still runs, demoted to EDA only.
+Status (2026-08-23): **FROZEN.** The JIT stager ran overnight
+(2026-08-23 00:00→03:17 PT, one pass, zero interventions): 500 films
+accepted from the first 636+ queue candidates, **677.2 h of footage,
+281.4 GB** in `s3://…/corpus/archive_films_v2/`, every object
+byte-verified, manifest sealed
+(sha `bd0c915e…4e02a1`, cross-checked laptop-side), nested subsets
+10 ⊂ 100 ⊂ 500 committed. 494/500 have audio (informational — six
+silent prints accepted by design). All 500 licenses explicit:
+471 public-domain marks/PD/CC0, 29 CC-BY variants (exact URL per film
+in the manifest). The full-collection census continues separately as
+EDA. §4 describes the pipeline that produced this.
 
 ---
 

@@ -122,10 +122,13 @@ def main():
         if subprocess.run([AWS, "s3", "cp", str(local), f"s3://{BUCKET}/{key}",
                            "--quiet"]).returncode != 0:
             sys.exit(f"upload failed: {key}")
-    subprocess.run([AWS, "s3api", "put-object", "--bucket", BUCKET,
-                    "--key", f"{KEY_PREFIX}/corpus_manifest.sha256",
-                    "--body", "/dev/stdin"],
-                   input=msha + "\n", text=True, capture_output=True)
+    # aws CLI needs a seekable --body; stdin is not (bitten on the first freeze)
+    slocal = Path.home() / "corpus_manifest.sha256"
+    slocal.write_text(msha + "\n")
+    if subprocess.run([AWS, "s3", "cp", str(slocal),
+                       f"s3://{BUCKET}/{KEY_PREFIX}/corpus_manifest.sha256",
+                       "--quiet"]).returncode != 0:
+        sys.exit("upload failed: corpus_manifest.sha256")
 
     print(f"FROZEN: {TARGET} docs, {manifest['total_hours']} h, "
           f"{manifest['total_gb']} GB; manifest sha256 {msha}", flush=True)
