@@ -32,6 +32,12 @@ AWS_BIN="$(command -v aws || echo /usr/local/bin/aws)"
 [ -x "$AWS_BIN" ] || AWS_BIN="$HOME/.local/bin/aws"
 mkdir -p "$OUT/rr" "$OUT/lg" "$CORPUS_DIR"
 
+# Keepalive: the 500-subset pull is ~281 GB of low-CPU network time — the
+# exact profile the idle watchdog kills (bitten during AMI staging).
+( while :; do :; done ) &
+KEEPALIVE_PID=$!
+trap 'kill $KEEPALIVE_PID 2>/dev/null || true' EXIT
+
 sampler() {  # $1 container, $2 csv
   ( echo "ts,cpu_usage_usec,mem_current,pids,anon_bytes"
     while docker inspect -f '{{.State.Running}}' "$1" 2>/dev/null | grep -q true; do
@@ -63,7 +69,7 @@ docker compose build rocketride langgraph smoke
 
 ( while true; do "$AWS_BIN" s3 sync "$OUT" "$S3_DEST" --quiet 2>/dev/null || true; sleep 60; done ) &
 SYNC_PID=$!
-trap 'kill $SYNC_PID 2>/dev/null || true' EXIT
+trap 'kill $SYNC_PID $KEEPALIVE_PID 2>/dev/null || true' EXIT
 
 echo "== [3/6] ARM 1: RocketRide ($RR_MODE, $N docs + $WARM warm, unpinned)"
 docker compose up -d rocketride
