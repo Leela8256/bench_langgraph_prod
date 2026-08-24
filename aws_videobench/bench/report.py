@@ -73,7 +73,13 @@ def report_one(run):
         print("  GATES FAILED — numbers below are diagnostic only, not quotable")
     v1 = vm.v1_throughput(run["records"], run["meta"])
     v2 = vm.v2_latency(run["records"], run["meta"], run["progress"])
-    cpu = vm.cpu_from_sampler(run["sampler"])
+    # Driver measurement markers (2026-08-23) window the sampler so CPU
+    # excludes warm-up/startup; older runs without markers fall back to the
+    # full span and the basis string says so.
+    s_ns = run["meta"].get("measurement_start_epoch_ns")
+    e_ns = run["meta"].get("measurement_end_epoch_ns")
+    window = (s_ns / 1e9, e_ns / 1e9) if s_ns and e_ns else None
+    cpu = vm.cpu_from_sampler(run["sampler"], window)
     v3 = vm.v3_efficiency(run["records"], run["meta"], cpu)
     v4 = vm.v4_resources(run["records"], run["meta"], cpu)
     v5 = vm.v5_cost(v1)
@@ -88,7 +94,8 @@ def report_one(run):
                     "threads_activated",          # sampler-version dependent
                     "time_to_first_result",       # mode dependent
                     "cpu_s_per_frame", "cpu_s_per_detection",
-                    "peak_mem", "cold_to_ready"))
+                    "peak_mem", "cold_to_ready",
+                    "mean_measured_video"))       # error-path only
     print(gate_line(cov))
     gates.append(cov)
     print(f"  envelope: {run['meta'].get('envelope', 'NOT RECORDED')}")
@@ -139,10 +146,28 @@ def main():
             print("\n  NOTE: single run — determinism unproven; not a "
                   "benchmark result (sizing evidence only)")
 
+    # Split verdict (exit-semantics review 2026-08-23): hard-gate validity
+    # drives the exit code; determinism at 1 rep is NOT_RUN, downgrading the
+    # EVIDENCE GRADE instead of masquerading as a processing failure. The
+    # wrapper combines this exit with the arms' own exit codes for
+    # execution_status.
     fails = [g for g in all_gates if g["status"] == "FAIL"]
     skips = [g for g in all_gates if g["status"] == "SKIP"]
-    print(f"\n== verdict: {'FAIL' if fails else 'PASS'}"
-          f" ({len(fails)} hard failures, {len(skips)} skipped gates)")
+    det = [g for g in all_gates if g["gate"] == "determinism"]
+    det_status = ("FAIL" if any(g["status"] == "FAIL" for g in det) else
+                  "NOT_RUN" if (not det or
+                                any("NOT_RUN" in g["detail"] for g in det)) else
+                  "PASS")
+    validity = "FAIL" if fails else "PASS"
+    grade = ("SIZING — single repetition, no determinism evidence; not a "
+             "publishable comparison" if det_status == "NOT_RUN" else
+             "REPEATED — determinism exercised; publishable claims still "
+             "need a shared CPU envelope and >=3 reps")
+    print(f"\n== verdict")
+    print(f"  validity_status: {validity} "
+          f"({len(fails)} hard failures, {len(skips)} skipped gates)")
+    print(f"  determinism: {det_status}")
+    print(f"  evidence_grade: {grade}")
     if fails:
         for g in fails:
             print(f"  FAILED: {g['gate']}: {g['detail'][:120]}")

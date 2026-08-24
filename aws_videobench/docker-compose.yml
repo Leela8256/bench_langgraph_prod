@@ -78,6 +78,10 @@ services:
       # Generous: rep 1 of a cold engine includes pip-installing the whisper +
       # rfdetr stacks and downloading model weights before any real work.
       BENCH_TIMEOUT_S: "${BENCH_TIMEOUT_S:-5400}"
+      # Engine pipeline TTL — must exceed BENCH_TIMEOUT_S (driver validates;
+      # a films500 blast runs ~18 h and a short ttl kills the pipe mid-batch).
+      # Empty -> driver default BENCH_TIMEOUT_S + 7200.
+      RR_PIPE_TTL_S: "${RR_PIPE_TTL_S:-}"
       # Engine worker-pool request, passed to use(threads=N). Unset = engine
       # default pool (how every video run before 2026-08-20 ran). Requested
       # is not activated — effective cores come from the cgroup sampler.

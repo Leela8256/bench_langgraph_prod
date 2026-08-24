@@ -24,7 +24,15 @@ from pathlib import Path
 URI = os.environ.get("ROCKETRIDE_URI", "ws://rocketride:5565/task/service")
 APIKEY = os.environ.get("ROCKETRIDE_APIKEY", "local-dev")
 PIPE_SRC = Path(os.environ.get("BENCH_PIPE", "/pipe/benchmark_video.pipe"))
-TIMEOUT_S = int(os.environ.get("BENCH_TIMEOUT_S", "21600"))
+TIMEOUT_S = int(os.environ.get("BENCH_TIMEOUT_S", "86400"))
+# Engine pipeline TTL must outlive the whole batch: a films500 blast runs
+# ~18 h, and a ttl shorter than the timeout kills the pipeline mid-batch
+# (caught in the 2026-08-23 preflight review — was hardcoded 28800).
+RR_PIPE_TTL_S = int(os.environ.get("RR_PIPE_TTL_S") or TIMEOUT_S + 7200)
+if RR_PIPE_TTL_S <= TIMEOUT_S:
+    raise SystemExit(f"RR_PIPE_TTL_S ({RR_PIPE_TTL_S}) must exceed "
+                     f"BENCH_TIMEOUT_S ({TIMEOUT_S}) — pipeline would expire "
+                     f"before the batch timeout")
 EMBED_DIM = 384
 POOL_MAX = int(os.environ.get("RR_POOL_MAX", "0")) or 10 ** 9
 ARM = "rocketride-docker-3.3.1-video"
@@ -176,11 +184,19 @@ async def main():
         corpus_shas = _m.get("sha256", {})
         video_durs = _m.get("video_duration_s", {})
         VIDEO_DURS.update(video_durs)
-    measured_audio_s = sum(durations.get(v.name) or 0 for v in corpus)
+    # Footage denominator (2026-08-23): the PROBED video-stream duration is
+    # authoritative for this detect-only benchmark — frames come from the
+    # video clock, not the container/source metadata (the AMI A/V lesson).
+    # Source metadata kept separately for transparency; probed falls back to
+    # source only where a probe is absent (old AMI manifests).
+    measured_video_s = sum(video_durs.get(v.name) or durations.get(v.name) or 0
+                           for v in corpus)
+    measured_source_s = sum(durations.get(v.name) or 0 for v in corpus)
 
     (out / "manifest.json").write_text(json.dumps(
         {"docs": [v.name for v in corpus], "n": len(corpus),
-         "measured_audio_s": measured_audio_s,
+         "measured_video_s": measured_video_s,
+         "measured_source_s": measured_source_s,
          # sha map from the corpus manifest -> the corpus_pin gate verifies
          "sha256": {v.name: corpus_shas[v.name]
                     for v in corpus if v.name in corpus_shas},
@@ -193,8 +209,9 @@ async def main():
     pipe_path.write_text(json.dumps(pipe))
 
     print(f"[rrv] corpus={len(corpus)} docs, "
-          f"{measured_audio_s/3600:.2f} h of footage, mode={mode}, "
-          f"warm={warm_docs}, timeout={TIMEOUT_S}s", flush=True)
+          f"{measured_video_s/3600:.2f} h of footage (video-stream probed), "
+          f"mode={mode}, warm={warm_docs}, timeout={TIMEOUT_S}s, "
+          f"pipe_ttl={RR_PIPE_TTL_S}s", flush=True)
 
     event_times: dict = {}
     event_actions: collections.Counter = collections.Counter()
@@ -238,7 +255,8 @@ async def main():
 
     client = RocketRideClient(uri=URI, auth=APIKEY, on_event=on_event)
     await client.connect()
-    use_kwargs = dict(filepath=str(pipe_path), use_existing=True, ttl=28800)
+    use_kwargs = dict(filepath=str(pipe_path), use_existing=True,
+                      ttl=RR_PIPE_TTL_S)
     if threads:
         use_kwargs["threads"] = threads
     used = await client.use(**use_kwargs)
@@ -344,8 +362,12 @@ async def main():
             "kind": "shot_meta", "arm": ARM, "mode": mode,
             "n_docs": len(corpus), "ok_docs": ok_n,
             "span_s": round(span, 2),
-            "measured_audio_s": measured_audio_s,
-            "realtime_factor": round(measured_audio_s / span, 2) if span else None,
+            "measured_video_s": measured_video_s,
+            "measured_source_s": measured_source_s,
+            # legacy alias (pre-2026-08-23 readers) — now carries the probed
+            # denominator, same as measured_video_s
+            "measured_audio_s": measured_video_s,
+            "realtime_factor": round(measured_video_s / span, 2) if span else None,
             "total_chunks": chunks,
             "timeout_s": TIMEOUT_S,
             "offered_concurrency": (len(corpus) if mode == "blast" else
@@ -355,18 +377,26 @@ async def main():
                            "detect_model": "rfdetr", "threshold": 0.3,
                            "embed_model": "multi-qa-MiniLM-L6-cos-v1",
                            "split": {"chunk_size": 4000, "overlap": 0},
-                           "expect_dim": 384},
+                           "expect_dim": 384,
+                           "bench_timeout_s": TIMEOUT_S,
+                           "rr_pipe_ttl_s": RR_PIPE_TTL_S,
+                           "duration_authority": "ffmpeg-probed video stream"},
             "threads_requested": threads,
             "warm_docs": len(warm_set), "warm_s": warm_s,
             "event_actions_seen": dict(event_actions),
             "mono_offset_ns": mono_offset_ns,
+            # Measured-interval markers (epoch ns): warm-up, model load and
+            # driver startup are BEFORE start — the report windows the cgroup
+            # sampler to [start, end] so CPU excludes them.
+            "measurement_start_epoch_ns": mono_offset_ns + t0,
+            "measurement_end_epoch_ns": mono_offset_ns + t0 + int(span * 1e9),
             "envelope": "NONE — sizing run: no cpuset, engine threads unpinned",
         }) + "\n")
 
     print(f"[rrv] DONE mode={mode}: {ok_n}/{len(records)} ok, "
           f"{chunks} chunks, span={span:.1f}s "
-          f"({measured_audio_s/3600:.2f} h footage -> "
-          f"{measured_audio_s/span:.1f}x realtime)", flush=True)
+          f"({measured_video_s/3600:.2f} h footage -> "
+          f"{measured_video_s/span:.1f}x realtime)", flush=True)
 
     try:
         await client.terminate(token)

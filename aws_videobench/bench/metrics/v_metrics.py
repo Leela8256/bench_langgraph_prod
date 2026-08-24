@@ -19,11 +19,20 @@ def _pct(sorted_vals, p):
     return sorted_vals[min(k, len(sorted_vals) - 1)]
 
 
+def _footage_s(meta, ok):
+    """Footage denominator, in authority order (2026-08-23): probed
+    video-stream duration; the legacy measured_audio_s key (which new
+    drivers alias to the probed value); per-record probed; per-record
+    source metadata last (old AMI artifacts)."""
+    return (meta.get("measured_video_s") or meta.get("measured_audio_s")
+            or sum(r.get("video_duration_s") or r.get("duration_s") or 0
+                   for r in ok))
+
+
 def v1_throughput(records, meta):
     ok = [r for r in records if r.get("ok")]
     span = meta.get("span_s") or 0
-    audio_s = meta.get("measured_audio_s") or sum(
-        r.get("duration_s") or 0 for r in ok)
+    audio_s = _footage_s(meta, ok)
     frames = sum(r.get("n_frames_est") or 0 for r in ok)
     chunks = sum(r.get("n_chunks") or 0 for r in ok)
     if not span:
@@ -84,29 +93,68 @@ def v2_latency(records, meta, progress=None):
     return out
 
 
-def cpu_from_sampler(sampler_rows, span_s=None):
-    """sampler_rows: list of (ts, cpu_usage_usec, mem_current[, mem_peak]).
-    Cumulative counters make totals exact over the sampled window."""
-    rows = [r for r in sampler_rows if len(r) >= 3]
+def _interp_counter(rows, t):
+    """Linear-interpolate a cumulative counter (col 1) at epoch second t.
+    Returns (value, clamped) — clamped=True when t falls outside the
+    sampled range and the nearest edge value is used instead."""
+    if t <= rows[0][0]:
+        return rows[0][1], t < rows[0][0]
+    if t >= rows[-1][0]:
+        return rows[-1][1], t > rows[-1][0]
+    for a, b in zip(rows, rows[1:]):
+        if a[0] <= t <= b[0]:
+            if b[0] == a[0]:
+                return a[1], False
+            f = (t - a[0]) / (b[0] - a[0])
+            return a[1] + f * (b[1] - a[1]), False
+    return rows[-1][1], True
+
+
+def cpu_from_sampler(sampler_rows, window_epoch_s=None):
+    """sampler_rows: (epoch_ts, cpu_usage_usec, mem_current[, pids, anon]).
+    Cumulative counters make totals exact over the sampled window.
+
+    window_epoch_s=(start, end): driver measurement markers — CPU is
+    interpolated at the boundaries (±one 15 s sampling interval precision)
+    so warm-up, model load and driver startup are EXCLUDED. Without
+    markers the full sampler span is used and the basis says so."""
+    rows = sorted(r for r in sampler_rows if len(r) >= 3)
     if len(rows) < 2:
         return None
-    dt = rows[-1][0] - rows[0][0]
-    cpu_s = (rows[-1][1] - rows[0][1]) / 1e6
-    mem_max = max(r[2] for r in rows)
-    if mem_max > 500e9:      # > box RAM: a corrupted sampler column, not a fact
-        mem_max = None
+    if window_epoch_s:
+        t_start, t_end = window_epoch_s
+        c0, cl0 = _interp_counter(rows, t_start)
+        c1, cl1 = _interp_counter(rows, t_end)
+        dt = t_end - t_start
+        cpu_s = (c1 - c0) / 1e6
+        gauge_rows = [r for r in rows if t_start <= r[0] <= t_end] or rows
+        basis = ("driver measurement markers, sampler interpolated at "
+                 "boundaries (±15 s)"
+                 + ("; marker outside sampled range — clamped" if cl0 or cl1
+                    else ""))
+    else:
+        dt = rows[-1][0] - rows[0][0]
+        cpu_s = (rows[-1][1] - rows[0][1]) / 1e6
+        gauge_rows = rows
+        basis = ("full sampler span — INCLUDES warm-up and driver startup; "
+                 "CPU figures are approximate for measured-interval claims")
     if dt <= 0:
         return None
-    out = {"window_s": dt, "cpu_s": round(cpu_s, 1),
+    mem_max = max(r[2] for r in gauge_rows)
+    if mem_max > 500e9:      # > box RAM: a corrupted sampler column, not a fact
+        mem_max = None
+    out = {"window_s": round(dt, 1), "cpu_s": round(cpu_s, 1),
            "effective_cores": round(cpu_s / dt, 2),
-           "mem_current_max_bytes": mem_max}
+           "mem_current_max_bytes": mem_max,
+           "window_basis": basis}
     # Optional 4th/5th columns (pids.current, anon bytes) — newer samplers.
-    pids = [r[3] for r in rows if len(r) >= 4]
+    pids = [r[3] for r in gauge_rows if len(r) >= 4]
     if pids:
         out["threads_activated"] = max(pids) - pids[0]
-    anon = [r[4] for r in rows if len(r) >= 5]
+    anon = [r[4] for r in gauge_rows if len(r) >= 5]
     if anon:
-        out["peak_rss_bytes_anon"] = max(anon)   # cache-corrected RSS
+        # cgroup memory.stat anon — NOT process RSS (honest-name review)
+        out["cgroup_anon_peak_bytes"] = max(anon)
     return out
 
 
@@ -114,7 +162,7 @@ def v3_efficiency(records, meta, cpu, allocated_cores=DEFAULT_ALLOCATED_CORES):
     if not cpu:
         return {"error": "no sampler data — cpu_s not measurable"}
     ok = [r for r in records if r.get("ok")]
-    audio_min = (meta.get("measured_audio_s") or 0) / 60
+    audio_min = _footage_s(meta, ok) / 60
     frames = sum(r.get("n_frames_est") or 0 for r in ok)
     dets = sum(r.get("n_detections") or 0 for r in ok)
     chunks = sum(r.get("n_chunks") or 0 for r in ok)
@@ -130,7 +178,9 @@ def v3_efficiency(records, meta, cpu, allocated_cores=DEFAULT_ALLOCATED_CORES):
         "threads_activated": cpu.get("threads_activated"),
         "allocated_cores": allocated_cores,
         "scaling_efficiency": round(cpu["effective_cores"] / allocated_cores, 3),
-        "note": "utilization is against the ARM'S ALLOCATION, span-averaged",
+        "cpu_window_basis": cpu.get("window_basis"),
+        "note": "utilization is against the ARM'S ALLOCATION, averaged over "
+                "the CPU window (see cpu_window_basis)",
     }
 
 
@@ -160,10 +210,23 @@ def v5_cost(v1, usd_per_hour=DEFAULT_USD_PER_HOUR):
     x = v1.get("x_realtime")
     if not x:
         return {"error": "no x_realtime"}
+    # Capacity from the MEASURED corpus (film-metrics review 2026-08-23):
+    # videos/day = measured completion rate held for 24 h. The old 30-min
+    # normalization survives under its own explicit name.
+    vps = v1.get("videos_per_s")
+    mean_min = None
+    if vps and v1.get("span_s") and v1.get("video_seconds"):
+        n_ok = vps * v1["span_s"]
+        if n_ok:
+            mean_min = round(v1["video_seconds"] / n_ok / 60, 1)
     return {
         "usd_per_1k_footage_hours": round(usd_per_hour / x * 1000, 2),
-        "videos_per_day_per_box": int(x * 24 * 2),   # at 30-min videos
-        "assumes": f"${usd_per_hour}/h instance, 30-min videos",
+        "videos_per_day_per_box": int(vps * 86400) if vps else None,
+        "mean_measured_video_min": mean_min,
+        "equivalent_30min_videos_per_day": int(x * 24 * 2),
+        "assumes": f"${usd_per_hour}/h instance; videos_per_day at the "
+                   f"measured mean duration ({mean_min} min), not 30-min "
+                   f"normalized",
     }
 
 

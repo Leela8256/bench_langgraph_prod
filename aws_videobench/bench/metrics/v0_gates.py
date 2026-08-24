@@ -129,11 +129,15 @@ def self_duplication(records):
 
 def determinism(rep_records):
     """Across reps ON THE SAME PLATFORM: ordered chunk hashes identical.
-    rep_records: list of {doc: record} maps, one per rep. Single rep FAILS
-    (unproven fails closed — PDF rule)."""
+    rep_records: list of {doc: record} maps, one per rep. A single rep is
+    NOT_RUN (SKIP), not a processing failure: fail-closed moves to the CLAIM
+    level — the report stamps evidence_grade SIZING and publishable
+    determinism claims stay prohibited (exit-semantics review 2026-08-23)."""
     if len(rep_records) < 2:
-        return _g("determinism", "FAIL",
-                  f"{len(rep_records)} rep(s): determinism unproven, fails closed")
+        return _g("determinism", "SKIP",
+                  f"NOT_RUN — {len(rep_records)} rep(s): determinism not "
+                  f"exercised; evidence grade SIZING, no publishable "
+                  f"determinism claim")
     base = rep_records[0]
     problems = []
     compared = 0
@@ -231,20 +235,31 @@ def input_identity(arm_a, arm_b):
 
 
 def corpus_pin(records, manifest):
-    """Corpus identity: input bytes vs the manifest's sha map (haystack-suite
-    'corpus pin'). SKIP when the manifest carries no shas."""
+    """Corpus identity: input bytes vs the manifest's sha map — FAIL-CLOSED
+    (hardened 2026-08-23). An empty map, a record with no pinned sha, a
+    duplicate record, or a drifted sha all FAIL: 'we did not check' must
+    never read as 'it passed'."""
     shas = (manifest or {}).get("sha256") or {}
     if not shas:
-        return _g("corpus_pin", "SKIP",
-                  "manifest carries no sha256 map (staged sets do; ad-hoc sets may not)")
-    bad = []
-    for r in records:
-        want = shas.get(r["doc"], {}).get("sha256")
-        if want and want != r.get("input_sha256"):
-            bad.append(r["doc"])
-    return _g("corpus_pin", "FAIL" if bad else "PASS",
-              f"drifted from manifest: {bad[:5]}" if bad else
-              f"{sum(1 for r in records if r['doc'] in shas)} docs match the pinned shas")
+        return _g("corpus_pin", "FAIL",
+                  "manifest carries no sha256 map — unverifiable, fails closed")
+    problems = []
+    counts = Counter(r["doc"] for r in records)
+    dups = sorted(d for d, c in counts.items() if c > 1)
+    if dups:
+        problems.append(f"duplicate records: {dups[:3]}")
+    unpinned = sorted(r["doc"] for r in records if r["doc"] not in shas)
+    if unpinned:
+        problems.append(f"no pinned sha for: {unpinned[:3]} "
+                        f"({len(unpinned)} total)")
+    drifted = sorted(r["doc"] for r in records if r["doc"] in shas
+                     and shas[r["doc"]].get("sha256") != r.get("input_sha256"))
+    if drifted:
+        problems.append(f"drifted from manifest: {drifted[:3]} "
+                        f"({len(drifted)} total)")
+    return _g("corpus_pin", "FAIL" if problems else "PASS",
+              "; ".join(problems) if problems else
+              f"{len(records)} docs match the pinned shas (fail-closed)")
 
 
 def chunk_parity_tight(arm_a, arm_b):

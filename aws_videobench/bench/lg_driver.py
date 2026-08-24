@@ -19,7 +19,7 @@ from pathlib import Path
 import requests
 
 BASE = os.environ.get("LG_URL", "http://langgraph:8200")
-TIMEOUT_S = int(os.environ.get("BENCH_TIMEOUT_S", "21600"))
+TIMEOUT_S = int(os.environ.get("BENCH_TIMEOUT_S", "86400"))
 EMBED_DIM = 384
 ARM = "langgraph-video-detect-v1"
 VIDEO_DURS: dict = {}
@@ -117,10 +117,15 @@ async def main():
         corpus_shas = _m.get("sha256", {})
         video_durs = _m.get("video_duration_s", {})
         VIDEO_DURS.update(video_durs)
-    measured_audio_s = sum(durations.get(v.name) or 0 for v in corpus)
+    # Probed video-stream duration is the footage denominator (2026-08-23) —
+    # same authority rule as bench_video.py; source metadata kept beside it.
+    measured_video_s = sum(video_durs.get(v.name) or durations.get(v.name) or 0
+                           for v in corpus)
+    measured_source_s = sum(durations.get(v.name) or 0 for v in corpus)
     (out / "manifest.json").write_text(json.dumps(
         {"docs": [v.name for v in corpus], "n": len(corpus),
-         "measured_audio_s": measured_audio_s,
+         "measured_video_s": measured_video_s,
+         "measured_source_s": measured_source_s,
          # sha map from the corpus manifest -> the corpus_pin gate verifies
          "sha256": {v.name: corpus_shas[v.name]
                     for v in corpus if v.name in corpus_shas},
@@ -145,8 +150,8 @@ async def main():
         raise SystemExit("LangGraph service never became ready")
     meta = requests.get(f"{BASE}/meta", timeout=5).json()
     print(f"[lgv] service ready: {meta}", flush=True)
-    print(f"[lgv] corpus={len(corpus)} docs, {measured_audio_s/3600:.2f} h, "
-          f"mode={mode}, warm={warm_docs}", flush=True)
+    print(f"[lgv] corpus={len(corpus)} docs, {measured_video_s/3600:.2f} h "
+          f"(video-stream probed), mode={mode}, warm={warm_docs}", flush=True)
 
     warm_set = all_videos[n:n + warm_docs]
     warm_s = None
@@ -161,6 +166,10 @@ async def main():
     progress_fh = open(out / "progress.jsonl", "a", buffering=1)
     done = [0]
     sem = asyncio.Semaphore(offered)
+    # Epoch<->monotonic mapping so the report can window the cgroup sampler
+    # (epoch-stamped) to the measured interval — LG previously had no such
+    # anchor and its warm-up CPU could not be excluded post hoc.
+    mono_offset_ns = time.time_ns() - time.perf_counter_ns()
     t0 = time.perf_counter_ns()
 
     async def one(video):
@@ -187,8 +196,11 @@ async def main():
             "kind": "shot_meta", "arm": ARM, "mode": mode,
             "n_docs": len(corpus), "ok_docs": ok_n,
             "span_s": round(span, 2),
-            "measured_audio_s": measured_audio_s,
-            "realtime_factor": round(measured_audio_s / span, 2) if span else None,
+            "measured_video_s": measured_video_s,
+            "measured_source_s": measured_source_s,
+            # legacy alias — carries the probed denominator (2026-08-23)
+            "measured_audio_s": measured_video_s,
+            "realtime_factor": round(measured_video_s / span, 2) if span else None,
             "total_chunks": chunks,
             "timeout_s": TIMEOUT_S,
             "offered_concurrency": offered,
@@ -196,13 +208,18 @@ async def main():
                            "detect_model": "rfdetr", "threshold": 0.3,
                            "embed_model": "multi-qa-MiniLM-L6-cos-v1",
                            "split": {"chunk_size": 4000, "overlap": 0},
-                           "expect_dim": 384, "service_meta": meta},
+                           "expect_dim": 384, "service_meta": meta,
+                           "bench_timeout_s": TIMEOUT_S,
+                           "duration_authority": "ffmpeg-probed video stream"},
             "warm_docs": len(warm_set), "warm_s": warm_s,
+            "mono_offset_ns": mono_offset_ns,
+            "measurement_start_epoch_ns": mono_offset_ns + t0,
+            "measurement_end_epoch_ns": mono_offset_ns + t0 + int(span * 1e9),
             "envelope": os.environ.get("BENCH_ENVELOPE",
                                        "NONE — sizing run: no cpuset, threads unpinned"),
         }) + "\n")
     print(f"[lgv] DONE mode={mode}: {ok_n}/{len(records)} ok, {chunks} chunks, "
-          f"span={span:.1f}s ({measured_audio_s/span:.1f}x realtime)", flush=True)
+          f"span={span:.1f}s ({measured_video_s/span:.1f}x realtime)", flush=True)
     if ok_n < len(records):
         raise SystemExit(f"RUN INCOMPLETE: {len(records) - ok_n} docs not ok")
 
