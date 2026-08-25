@@ -29,7 +29,9 @@ TIMEOUT_S = int(os.environ.get("BENCH_TIMEOUT_S", "86400"))
 # ~18 h, and a ttl shorter than the timeout kills the pipeline mid-batch
 # (caught in the 2026-08-23 preflight review — was hardcoded 28800).
 RR_PIPE_TTL_S = int(os.environ.get("RR_PIPE_TTL_S") or TIMEOUT_S + 7200)
-if RR_PIPE_TTL_S <= TIMEOUT_S:
+# ttl=0 = no expiry (engine source: "Tasks with ttl=0 have no timeout") —
+# the matched posture uses it; only a FINITE ttl must exceed the timeout.
+if RR_PIPE_TTL_S != 0 and RR_PIPE_TTL_S <= TIMEOUT_S:
     raise SystemExit(f"RR_PIPE_TTL_S ({RR_PIPE_TTL_S}) must exceed "
                      f"BENCH_TIMEOUT_S ({TIMEOUT_S}) — pipeline would expire "
                      f"before the batch timeout")

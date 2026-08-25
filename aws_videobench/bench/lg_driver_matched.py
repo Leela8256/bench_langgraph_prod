@@ -175,16 +175,23 @@ async def main():
     print(f"[lgm] posture={POSTURE}: {W} workers verified (pids "
           f"{[m['pid'] for m in metas]}), torch {TORCH_THREADS}/1, detect concurrency 1", flush=True)
 
-    # ---- warm every endpoint explicitly with BOTH fixtures ----
+    # ---- warm every endpoint explicitly with BOTH fixtures (endpoints in
+    # parallel, fixtures sequential per endpoint; excluded from measurement) ----
     warm_records = []
-    for ep, base in enumerate(ENDPOINTS):
+    def warm_endpoint(ep):
+        out_ = []
         for wv in warm_set:
-            rec = process_one(base, ep, wv, durations, {"warm": True})
+            rec = process_one(ENDPOINTS[ep], ep, wv, durations, {"warm": True})
             if not rec.get("ok"):
-                raise SystemExit(f"WARM FAIL: endpoint {ep} ({base}) on {wv.name}: {rec.get('reason')} {rec.get('error')}")
-            warm_records.append({"endpoint_index": ep, "worker_pid": rec.get("worker_pid"),
-                                 "fixture": wv.name,
-                                 "warm_s": round((rec['completion_ns'] - rec['submit_ns']) / 1e9, 1)})
+                raise SystemExit(f"WARM FAIL: endpoint {ep} ({ENDPOINTS[ep]}) on {wv.name}: "
+                                 f"{rec.get('reason')} {rec.get('error')}")
+            out_.append({"endpoint_index": ep, "worker_pid": rec.get("worker_pid"),
+                         "fixture": wv.name,
+                         "warm_s": round((rec['completion_ns'] - rec['submit_ns']) / 1e9, 1)})
+        return out_
+    with ThreadPoolExecutor(max_workers=W) as wex:
+        for out_ in wex.map(warm_endpoint, range(W)):
+            warm_records.extend(out_)
     pids_warm = {r["worker_pid"] for r in warm_records}
     if len(pids_warm) != W:
         raise SystemExit(f"WARM FAIL: warm requests served by {len(pids_warm)} distinct pids, expected {W}")

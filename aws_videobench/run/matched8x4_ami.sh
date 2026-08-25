@@ -104,9 +104,9 @@ os.replace(f"{d}/{seq}.json.tmp", f"{d}/{seq}.json")
 PY
         rm -f "$req"
       done
-    done ) &
-  echo $!
-}
+    done ) > "$2/watcher.log" 2>&1 &     # MUST redirect: a backgrounded loop that
+  echo $!                                 # keeps this function's stdout open hangs
+}                                         # the CW=$(...) capture forever (bitten)
 
 echo "== [1/6] quiet-box preflight"
 [ "$(docker ps -q | wc -l | tr -d ' ')" = "0" ] || { echo "FATAL: containers running — box not quiet" >&2; docker ps; exit 1; }
