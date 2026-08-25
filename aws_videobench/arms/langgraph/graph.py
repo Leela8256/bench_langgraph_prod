@@ -21,12 +21,13 @@ from langgraph.graph import END, START, StateGraph
 from workload.chunk import chunk_lines
 from workload.detect import detect_frames
 from workload.embed import embed_chunks
-from workload.frames import extract_frames
+from workload.frames import cleanup_frames, extract_frames
 
 
 class VideoState(TypedDict, total=False):
     video_path: str
-    frames: list
+    frames: list            # PNG paths on disk (streamed into detection)
+    frames_dir: str
     det_lines: list[str]
     chunks: list[str]
     embeddings: list[list[float]]
@@ -36,16 +37,19 @@ class VideoState(TypedDict, total=False):
 
 def frames_node(state: VideoState) -> dict:
     t0 = time.perf_counter()
-    frames = extract_frames(state["video_path"])
-    return {"frames": frames,
+    frames_dir, frames = extract_frames(state["video_path"])
+    return {"frames": frames, "frames_dir": frames_dir,
             "timings": {**state.get("timings", {}),
                         "frames_s": round(time.perf_counter() - t0, 3)}}
 
 
 def detect_node(state: VideoState) -> dict:
     t0 = time.perf_counter()
-    lines = detect_frames(state["frames"])
-    return {"det_lines": lines, "frames": [],   # frames are large; drop them
+    try:
+        lines = detect_frames(state["frames"])
+    finally:
+        cleanup_frames(state["frames_dir"])
+    return {"det_lines": lines, "frames": [], "frames_dir": "",
             "timings": {**state["timings"],
                         "detect_s": round(time.perf_counter() - t0, 3)}}
 

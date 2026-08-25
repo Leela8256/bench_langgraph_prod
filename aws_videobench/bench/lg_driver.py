@@ -66,14 +66,31 @@ def fill_from_response(rec, out):
     return okv
 
 
+def _post_video(video):
+    """Stream the multipart body from disk. requests' files= builds the
+    whole body in memory — 32 in-flight ~0.7 GB films held ~20 GB in the
+    DRIVER container and helped OOM the box (films500 post-mortem
+    2026-08-24). requests-toolbelt streams; fall back with a warning."""
+    with open(video, "rb") as fh:
+        try:
+            from requests_toolbelt import MultipartEncoder
+            enc = MultipartEncoder(fields={"file": (video.name, fh, "video/mp4")})
+            return requests.post(f"{BASE}/process", data=enc,
+                                 headers={"Content-Type": enc.content_type},
+                                 timeout=TIMEOUT_S)
+        except ImportError:
+            print("[lgv] WARNING: requests_toolbelt missing — buffering upload "
+                  "in memory", flush=True)
+            return requests.post(f"{BASE}/process",
+                                 files={"file": (video.name, fh)},
+                                 timeout=TIMEOUT_S)
+
+
 def process_one(video, durations):
     rec = base_record(video, durations)
     rec["submit_ns"] = time.perf_counter_ns()
     try:
-        with open(video, "rb") as fh:
-            r = requests.post(f"{BASE}/process",
-                              files={"file": (video.name, fh)},
-                              timeout=TIMEOUT_S)
+        r = _post_video(video)
         rec["completion_ns"] = time.perf_counter_ns()
         rec["timing_source"] = "client-observed HTTP response"
         if r.status_code != 200:

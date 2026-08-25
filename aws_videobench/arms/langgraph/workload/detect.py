@@ -14,6 +14,7 @@ loading RF-DETR takes seconds and must happen once, not per frame.
 """
 
 import json
+import os
 import threading
 
 THRESHOLD = 0.3
@@ -54,4 +55,15 @@ def detect_frame(image) -> str:
 
 
 def detect_frames(frames) -> list[str]:
-    return [detect_frame(f) for f in frames]
+    """frames: PNG paths (streamed: one decoded at a time, released before
+    the next) or already-decoded images (legacy callers)."""
+    out = []
+    for f in frames:
+        if isinstance(f, (str, os.PathLike)):
+            from workload.frames import load_frame
+            img = load_frame(f)
+            out.append(detect_frame(img))
+            del img
+        else:
+            out.append(detect_frame(f))
+    return out

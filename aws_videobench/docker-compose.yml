@@ -47,6 +47,12 @@ services:
     platform: linux/amd64
     container_name: videobench-langgraph
     ports: ["8200:8200"]
+    # films500 post-mortem (2026-08-24): explicit limit so a memory blow-up
+    # is a contained, visible OOM (exit 137) instead of a host-wide kill;
+    # MALLOC_ARENA_MAX curbs glibc arena growth under 32 request threads.
+    mem_limit: 52g
+    environment:
+      MALLOC_ARENA_MAX: "2"
     volumes:
       - rr-model-cache:/root/.cache   # shared: rfdetr + miniLM download once per box
     healthcheck:

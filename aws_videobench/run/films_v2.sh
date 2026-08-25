@@ -31,6 +31,12 @@ N="${N:-$((SUBSET - 2))}"
 WARM="${WARM:-2}"
 RR_MODE="${RR_MODE:-blast}"
 LG_MODE="${LG_MODE:-c32}"
+# Partial reruns: ARMS="lg" PAIR_RR=results/<run>/rr reruns only LangGraph and
+# reports it against an already-finished RocketRide directory (and vice
+# versa with PAIR_LG). Preflight + hashing still run: the corpus is re-proven.
+ARMS="${ARMS:-rr lg}"
+PAIR_RR="${PAIR_RR:-}"
+PAIR_LG="${PAIR_LG:-}"
 CORPUS_DIR="${CORPUS_DIR:-$HOME/bench_corpus_films_v2_$SUBSET}"
 S3_CORPUS="s3://rocketride-benchmark-data/leela/corpus/archive_films_v2"
 OUT="results/films$SUBSET-$STAMP"
@@ -181,6 +187,8 @@ echo "   provenance -> $PROV/"
 SYNC_PID=$!
 trap 'kill $SYNC_PID $KEEPALIVE_PID 2>/dev/null || true' EXIT
 
+rc_rr=0; rc_lg=0
+if echo " $ARMS " | grep -q " rr "; then
 echo "== [5/7] ARM 1: RocketRide ($RR_MODE, $N docs + $WARM warm, unpinned)"
 docker compose up -d rocketride
 for i in $(seq 1 60); do
@@ -197,7 +205,11 @@ kill "$RR_SAMPLER" 2>/dev/null || true
 docker compose logs --no-color rocketride > "$OUT/rr/service.log" 2>&1 || true
 docker compose stop rocketride && docker compose rm -f rocketride
 echo "   RR done (rc=$rc_rr)"
+else
+echo "== [5/7] ARM 1: RocketRide SKIPPED (ARMS=$ARMS; pairing with ${PAIR_RR:-nothing})"
+fi
 
+if echo " $ARMS " | grep -q " lg "; then
 echo "== [6/7] ARM 2: LangGraph ($LG_MODE, $N docs + $WARM warm, unpinned)"
 docker compose up -d langgraph
 for i in $(seq 1 90); do
@@ -214,10 +226,16 @@ kill "$LG_SAMPLER" 2>/dev/null || true
 docker compose logs --no-color langgraph > "$OUT/lg/service.log" 2>&1 || true
 docker compose down
 echo "   LG done (rc=$rc_lg)"
+else
+echo "== [6/7] ARM 2: LangGraph SKIPPED (ARMS=$ARMS; pairing with ${PAIR_LG:-nothing})"
+fi
 
 echo "== [7/7] report + final sync"
+RR_DIR="$OUT/rr"; LG_DIR="$OUT/lg"
+[ -n "$PAIR_RR" ] && { RR_DIR="$PAIR_RR"; cp -r "$PAIR_RR" "$OUT/rr_paired"; }
+[ -n "$PAIR_LG" ] && { LG_DIR="$PAIR_LG"; cp -r "$PAIR_LG" "$OUT/lg_paired"; }
 rc_rep=0
-python3 bench/report.py --arms "$OUT/rr" "$OUT/lg" > "$OUT/report.txt" 2>&1 || rc_rep=$?
+python3 bench/report.py --arms "$RR_DIR" "$LG_DIR" > "$OUT/report.txt" 2>&1 || rc_rep=$?
 cat "$OUT/report.txt"
 kill $SYNC_PID 2>/dev/null || true
 rc_sync=0
