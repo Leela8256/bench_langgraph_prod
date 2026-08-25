@@ -1,0 +1,2 @@
+[videobench-langgraph:v1] id=sha256:5cf9522a1efcff87520f67b17de5cf16de936d0815915ca6fb76ee07cadf0587 digests=[videobench-langgraph@sha256:5cf9522a1efcff87520f67b17de5cf16de936d0815915ca6fb76ee07cadf0587] created=2026-08-21T00:04:04.497962117Z
+[videobench-rocketride:3.3.1] id=sha256:3b8a6a645d4268a521ebc128cd73439a22313367ad14c1109d194c60bcb1959c digests=[videobench-rocketride@sha256:3b8a6a645d4268a521ebc128cd73439a22313367ad14c1109d194c60bcb1959c] created=2026-08-19T19:16:55.479782602Z

@@ -1,0 +1,55 @@
+{
+ "policy": "PD/CC0/BY/BY-SA freely usable; NC/ND kept-and-classified (internal sizing); review before publication",
+ "counts": {
+  "pd_license": 388,
+  "cc0": 11,
+  "pd_mark": 72,
+  "by-sa": 1,
+  "by-nc-sa": 3,
+  "by": 18,
+  "by-nc-nd": 5,
+  "by-nc": 2
+ },
+ "policy_review": [
+  {
+   "doc": "panorama_ephemera2004.mp4",
+   "family": "by-nc-sa"
+  },
+  {
+   "doc": "Breaking_With_Old_Ideas.mp4",
+   "family": "by-nc-sa"
+  },
+  {
+   "doc": "OperationIVY1952.mp4",
+   "family": "by-nc-nd"
+  },
+  {
+   "doc": "DiaryOfANudistwidescreen.mp4",
+   "family": "by-nc"
+  },
+  {
+   "doc": "Decay2012-TheLhcZombieFilmfullFilm.mp4",
+   "family": "by-nc"
+  },
+  {
+   "doc": "DeadManDrinking.mp4",
+   "family": "by-nc-nd"
+  },
+  {
+   "doc": "TheSheik.mp4",
+   "family": "by-nc-nd"
+  },
+  {
+   "doc": "Zeitgeist.Addendum.mp4",
+   "family": "by-nc-nd"
+  },
+  {
+   "doc": "Sobaka.mp4",
+   "family": "by-nc-nd"
+  },
+  {
+   "doc": "Cafune.mp4",
+   "family": "by-nc-sa"
+  }
+ ]
+}

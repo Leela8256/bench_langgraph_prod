@@ -1,0 +1,21 @@
+
+== results/rrsweep-20260824T061609Z/threads_unset  arm=rocketride-docker-3.3.1-video mode=blast
+  [PASS] census             16/16 docs, all ok
+  [PASS] structure          384-dim finite normalized, counts consistent
+  [PASS] frame_law          16 docs within ±1
+  [PASS] self_duplication   no duplicate chunks in any doc
+  [PASS] corpus_pin         16 docs match the pinned shas (fail-closed)
+  V1 throughput: {"x_realtime": 35.07, "videos_per_s": 0.0161, "chunks_per_s": 0.672, "frames_per_s": 2.336, "chunks_per_video": 41.6, "frames_per_video": 144.8, "realtime_streams_sustainable": 35.1, "video_seconds": 34768.6, "footage_hours": 9.66, "span_s": 991.38}
+  V2 latency: {"mode": "blast", "note": "batch span is exact; per-doc completion is batch-position (includes queue wait) \u2014 no service-latency claims", "batch_span_s": 991.38, "time_to_first_result_s": 153.0, "time_to_first_result_basis": "first client-observed completion event within the batch \u2014 NOT comparable to an atomic batch API's first result without this basis string", "completion_curve_s": {"p50": 1127.0, "p90": 1144.4, "last": 1144.4}}
+  V3 efficiency: {"cpu_s_per_video": 370.0, "cpu_s_per_footage_min": 10.22, "cpu_s_per_frame": 2.556, "cpu_s_per_detection": 0.58, "cpu_s_per_chunk": 8.89, "effective_cores": 5.97, "achieved_parallelism": 5.97, "threads_activated": 1637, "allocated_cores": 32, "scaling_efficiency": 0.187, "cpu_window_basis": "driver measurement markers, sampler interpolated at boundaries (\u00b115 s); marker outside sampled range \u2014 clamped", "note": "utilization is against the ARM'S ALLOCATION, averaged over the CPU window (see cpu_window_basis)"}
+  V4 resources: {"peak_mem_bytes": 22195666944, "peak_mem_note": "cgroup memory.current max \u2014 includes page cache", "cold_to_ready_s": 26.126625029, "stage_split": "not decomposable (engine is a black box)"}
+  V5 cost: {"usd_per_1k_footage_hours": 40.72, "videos_per_day_per_box": 1391, "mean_measured_video_min": 36.3, "equivalent_30min_videos_per_day": 1683, "assumes": "$1.428/h instance; videos_per_day at the measured mean duration (36.3 min), not 30-min normalized"}
+  [PASS] metric_coverage    all metrics non-null or exempt
+  envelope: NONE — sizing run: no cpuset, engine threads unpinned
+
+  NOTE: single run — determinism unproven; not a benchmark result (sizing evidence only)
+
+== verdict
+  validity_status: PASS (0 hard failures, 0 skipped gates)
+  determinism: NOT_RUN
+  evidence_grade: SIZING — single repetition, no determinism evidence; not a publishable comparison
