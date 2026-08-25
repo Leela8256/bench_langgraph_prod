@@ -25,6 +25,45 @@ from graph import build_video_graph
 ARM = "langgraph-video-detect-v1"
 _graph = None
 _ready = False
+_PORT = os.environ.get("LG_PORT", "8200")
+_TORCH_THREADS = os.environ.get("LG_TORCH_THREADS")
+_TORCH_INTEROP = os.environ.get("LG_TORCH_INTEROP")
+_ckpt_hashes: dict = {}
+
+
+def _configure_torch():
+    """Matched posture only (env-driven; the default posture leaves torch
+    alone). set_num_interop_threads must run before any parallel torch work,
+    so this happens first thing in lifespan, before the models load."""
+    if not (_TORCH_THREADS or _TORCH_INTEROP):
+        return
+    import torch
+    if _TORCH_INTEROP:
+        try:
+            torch.set_num_interop_threads(int(_TORCH_INTEROP))
+        except RuntimeError as exc:      # already initialised — report, don't hide
+            print(f"[service] set_num_interop_threads: {exc}", flush=True)
+    if _TORCH_THREADS:
+        torch.set_num_threads(int(_TORCH_THREADS))
+
+
+def _checkpoint_hashes() -> dict:
+    """sha256 of the model files actually on disk (best effort, cached)."""
+    if _ckpt_hashes:
+        return _ckpt_hashes
+    import glob
+    cands = {"rfdetr": glob.glob(os.path.expanduser("~/.roboflow/models/*.pth"))
+                       + glob.glob("/root/.cache/**/rf-detr*.pth", recursive=True),
+             "minilm": glob.glob("/root/.cache/huggingface/hub/models--sentence-transformers--multi-qa-MiniLM-L6-cos-v1/snapshots/*/model.safetensors")
+                       + glob.glob("/root/.cache/huggingface/hub/models--sentence-transformers--multi-qa-MiniLM-L6-cos-v1/snapshots/*/pytorch_model.bin")}
+    for k, paths in cands.items():
+        for p in sorted(set(paths))[:1]:
+            h = hashlib.sha256()
+            with open(p, "rb") as f:
+                for blk in iter(lambda: f.read(1 << 20), b""):
+                    h.update(blk)
+            _ckpt_hashes[k] = {"path": p, "sha256": h.hexdigest()}
+    return _ckpt_hashes
 
 
 def _warmup():
@@ -43,8 +82,10 @@ def _warmup():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _graph
+    _configure_torch()
     _graph = build_video_graph()
     _warmup()
+    _checkpoint_hashes()
     yield
 
 
@@ -64,7 +105,30 @@ def meta():
     from workload.detect import THRESHOLD
     from workload.embed import MODEL_ID
     from workload.frames import INTERVAL_S
+    from workload import detect as _det, embed as _emb
+    torch_rb = None
+    try:
+        import torch
+        torch_rb = {"num_threads": torch.get_num_threads(),
+                    "num_interop_threads": torch.get_num_interop_threads(),
+                    "version": torch.__version__}
+    except Exception as exc:
+        torch_rb = {"error": str(exc)[:80]}
+    ck = _checkpoint_hashes()
     return {"arm": ARM,
+            "pid": os.getpid(), "port": _PORT,
+            "worker_index": os.environ.get("LG_WORKER_INDEX"),
+            "graph_compiled": _graph is not None,
+            "rfdetr_loaded": getattr(_det, "_model", None) is not None,
+            "minilm_loaded": getattr(_emb, "_model", None) is not None,
+            "rfdetr_checkpoint_sha256": (ck.get("rfdetr") or {}).get("sha256"),
+            "minilm_checkpoint_sha256": (ck.get("minilm") or {}).get("sha256"),
+            "torch": torch_rb,
+            "env": {k: os.environ.get(k) for k in
+                    ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS",
+                     "VECLIB_MAXIMUM_THREADS", "NUMEXPR_NUM_THREADS", "TORCH_NUM_THREADS",
+                     "MALLOC_ARENA_MAX")},
+            "detect_concurrency_per_process": _det.DETECT_CONCURRENCY,
             "frame_interval_s": INTERVAL_S,
             "detector": {"model": "rfdetr-base", "threshold": THRESHOLD},
             "splitter": {"chunk_size": CHUNK_SIZE, "chunk_overlap": CHUNK_OVERLAP},
@@ -101,6 +165,8 @@ async def process(file: UploadFile):
         # CPU-bound graph in a worker thread so the event loop stays live.
         result = await anyio.to_thread.run_sync(_process_sync, tmp)
         result["filename"] = file.filename
+        result["worker_pid"] = os.getpid()
+        result["port"] = _PORT
         return result
     finally:
         os.unlink(tmp)

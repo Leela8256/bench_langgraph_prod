@@ -21,6 +21,12 @@ THRESHOLD = 0.3
 _lock = threading.Lock()
 _model = None
 _classes = None
+# Matched posture: at most N concurrent RF-DETR predicts per process (1 =
+# mirrors the engine's per-model device lock). 0/unset = the native unlocked
+# posture — unchanged. The lock wraps ONLY the predict call: extraction,
+# chunking, embedding still overlap.
+DETECT_CONCURRENCY = int(os.environ.get("LG_DETECT_CONCURRENCY_PER_PROCESS", "0") or 0)
+_inference_sem = threading.Semaphore(DETECT_CONCURRENCY) if DETECT_CONCURRENCY > 0 else None
 
 
 def _load():
@@ -40,7 +46,11 @@ def _load():
 def detect_frame(image) -> str:
     """One frame -> one JSON line of detections (possibly '[]')."""
     model, classes = _load()
-    det = model.predict(image, threshold=THRESHOLD)
+    if _inference_sem is not None:
+        with _inference_sem:
+            det = model.predict(image, threshold=THRESHOLD)
+    else:
+        det = model.predict(image, threshold=THRESHOLD)
     out = []
     for (x1, y1, x2, y2), score, cls in zip(det.xyxy, det.confidence, det.class_id):
         out.append({

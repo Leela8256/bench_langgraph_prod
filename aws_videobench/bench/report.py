@@ -54,16 +54,46 @@ def gate_line(g):
     return f"  [{mark}] {g['gate']:18s} {g['detail']}"
 
 
+def posture_gates(meta):
+    """Matched-posture fail-closed gates: the census/readbacks that make
+    '8 real processes' a verified fact. Default postures get no extra gate."""
+    p = meta.get("posture") or ""
+    out = []
+    if p.startswith("rr_matched"):
+        c = meta.get("task_census") or {}
+        k = meta.get("tasks")
+        ok = (len(c.get("new_task_pids") or []) == k
+              and len(set(c.get("project_ids") or [])) == k
+              and c.get("tokens_distinct") is True
+              and len(c.get("environ_readback") or {}) == k)
+        out.append(v0._g("task_census", "PASS" if ok else "FAIL",
+                         f"{len(c.get('new_task_pids') or [])}/{k} task processes, "
+                         f"{len(set(c.get('project_ids') or []))} project ids, environ "
+                         f"readback for {len(c.get('environ_readback') or {})}"))
+    elif p.startswith("lg_matched"):
+        rb = meta.get("worker_readbacks") or []
+        w = meta.get("workers")
+        pids = {m.get("pid") for m in rb}
+        ok = (len(rb) == w and len(pids) == w and None not in pids
+              and all((m.get("torch") or {}).get("num_interop_threads") == 1 for m in rb)
+              and all(m.get("detect_concurrency_per_process") == 1 for m in rb))
+        out.append(v0._g("worker_census", "PASS" if ok else "FAIL",
+                         f"{len(pids)}/{w} distinct worker pids with torch/interop/"
+                         f"detect-concurrency readbacks"))
+    return out
+
+
 def run_gates(run):
     recs, man = run["records"], run["manifest"].get("docs") or \
         [r["doc"] for r in run["records"]]
     return [v0.census(recs, man), v0.structure(recs),
             v0.frame_law(recs), v0.self_duplication(recs),
-            v0.corpus_pin(recs, run["manifest"])]
+            v0.corpus_pin(recs, run["manifest"])] + posture_gates(run["meta"])
 
 
 def report_one(run):
     print(f"\n== {run['dir']}  arm={run['meta'].get('arm', '?')} "
+          f"posture={run['meta'].get('posture', 'default')} "
           f"mode={run['meta'].get('mode', '?')}")
     gates = run_gates(run)
     for g in gates:

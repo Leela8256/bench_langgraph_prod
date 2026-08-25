@@ -17,7 +17,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY workload/ ./workload/
-COPY graph.py service.py ./
+COPY graph.py service.py serve8.py ./
 
 EXPOSE 8200
 # Models download at first boot into /root/.cache — mount the shared model
