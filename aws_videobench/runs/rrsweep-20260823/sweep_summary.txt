@@ -1,0 +1,8 @@
+RocketRide thread-scaling sweep — 2026-08-23/24, box c7i.8xlarge, 16 measured AMI docs (25-40 min band, 10.26 h) + 1 warm, blast, fresh engine per config, single task/token (default posture)
+ threads eff_cores threads_act x_realtime cpu_s_fmin
+   unset      5.97        1637      35.07      10.22
+       8      5.96         924      35.27      10.15
+      32      5.93        1640      34.93      10.19
+      64      5.94        1639      35.19      10.13
+     128   ABORTED           -          -          -   (user stop, satisfied)
+Reading: use(threads=N) resizes the task's pool (threads_activated moves) but utilization and throughput do not — the ~6-core ceiling is PER TASK (device lock), not per engine; multi-task posture is the escape (see Ansh WS-1 memo, 2026-08-24). Full per-config reports: s3://rocketride-benchmark-data/leela/videobench/rrsweep-*/

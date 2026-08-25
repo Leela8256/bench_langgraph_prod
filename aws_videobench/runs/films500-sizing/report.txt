@@ -1,0 +1,47 @@
+
+== results/films500-20260824T073256Z/rr  arm=rocketride-docker-3.3.1-video mode=blast
+  [PASS] census             498/498 docs, all ok
+  [PASS] structure          384-dim finite normalized, counts consistent
+  [warn] frame_law          VFR over-sampling (warn): 20000LeaguesUndertheSea.mp4: +21; ABucketofBlood.mp4: +2; ARomanceOfTheRedwoods.mp4: +6; AStarIsBorn.mp4: +6; A_Study_In_Scarlet.mp4: +3 — 155 within ±1
+  [PASS] self_duplication   no duplicate chunks in any doc
+  [PASS] corpus_pin         498 docs match the pinned shas (fail-closed)
+  V1 throughput: {"x_realtime": 35.01, "videos_per_s": 0.0072, "chunks_per_s": 0.772, "frames_per_s": 2.367, "chunks_per_video": 107.6, "frames_per_video": 329.8, "realtime_streams_sustainable": 35.0, "video_seconds": 2429090.6, "footage_hours": 674.75, "span_s": 69384.55}
+  V2 latency: {"mode": "blast", "note": "batch span is exact; per-doc completion is batch-position (includes queue wait) \u2014 no service-latency claims", "batch_span_s": 69384.55, "time_to_first_result_s": 227.6, "time_to_first_result_basis": "first client-observed completion event within the batch \u2014 NOT comparable to an atomic batch API's first result without this basis string", "completion_curve_s": {"p50": 38058.1, "p90": 64691.3, "last": 69658.5}}
+  V3 efficiency: {"cpu_s_per_video": 958.3, "cpu_s_per_footage_min": 11.79, "cpu_s_per_frame": 2.906, "cpu_s_per_detection": 0.6454, "cpu_s_per_chunk": 8.91, "effective_cores": 6.88, "achieved_parallelism": 6.88, "threads_activated": 3720, "allocated_cores": 32, "scaling_efficiency": 0.215, "cpu_window_basis": "driver measurement markers, sampler interpolated at boundaries (\u00b115 s)", "note": "utilization is against the ARM'S ALLOCATION, averaged over the CPU window (see cpu_window_basis)"}
+  V4 resources: {"peak_mem_bytes": 62629351424, "peak_mem_note": "cgroup memory.current max \u2014 includes page cache", "cold_to_ready_s": 251.047535259, "stage_split": "not decomposable (engine is a black box)"}
+  V5 cost: {"usd_per_1k_footage_hours": 40.79, "videos_per_day_per_box": 622, "mean_measured_video_min": 81.0, "equivalent_30min_videos_per_day": 1680, "assumes": "$1.428/h instance; videos_per_day at the measured mean duration (81.0 min), not 30-min normalized"}
+  [PASS] metric_coverage    all metrics non-null or exempt
+  envelope: NONE — sizing run: no cpuset, engine threads unpinned
+
+== results/films500-20260825T061529Z/lg  arm=langgraph-video-detect-v1 mode=c32
+  [PASS] census             498/498 docs, all ok
+  [PASS] structure          384-dim finite normalized, counts consistent
+  [PASS] frame_law          498 docs within ±1
+  [PASS] self_duplication   no duplicate chunks in any doc
+  [PASS] corpus_pin         498 docs match the pinned shas (fail-closed)
+  V1 throughput: {"x_realtime": 154.59, "videos_per_s": 0.0317, "chunks_per_s": 3.322, "frames_per_s": 10.306, "chunks_per_video": 104.8, "frames_per_video": 325.2, "realtime_streams_sustainable": 154.6, "video_seconds": 2429090.6, "footage_hours": 674.75, "span_s": 15712.72}
+  V2 latency: {"mode": "c32", "service_latency_s": {"p50": 940.56, "p95": 1376.69, "p99": 1974.94}, "latency_s_per_footage_min": 12.255, "failed_items": 0, "time_to_first_result_s": 193.4, "time_to_first_result_basis": "first completed request (per-item mode)"}
+  V3 efficiency: {"cpu_s_per_video": 803.2, "cpu_s_per_footage_min": 9.88, "cpu_s_per_frame": 2.47, "cpu_s_per_detection": 0.5457, "cpu_s_per_chunk": 7.663, "effective_cores": 25.46, "achieved_parallelism": 25.46, "threads_activated": 2162, "allocated_cores": 32, "scaling_efficiency": 0.796, "cpu_window_basis": "driver measurement markers, sampler interpolated at boundaries (\u00b115 s); marker outside sampled range \u2014 clamped", "note": "utilization is against the ARM'S ALLOCATION, averaged over the CPU window (see cpu_window_basis)"}
+  V4 resources: {"peak_mem_bytes": 51708088320, "peak_mem_note": "cgroup memory.current max \u2014 includes page cache", "cold_to_ready_s": 132.609064591, "lg_stage_split": {"frames_s": "5%", "detect_s": "94%", "chunk_s": "0%", "embed_s": "1%"}, "lg_framework_overhead_s": 3.74}
+  V5 cost: {"usd_per_1k_footage_hours": 9.24, "videos_per_day_per_box": 2738, "mean_measured_video_min": 81.3, "equivalent_30min_videos_per_day": 7420, "assumes": "$1.428/h instance; videos_per_day at the measured mean duration (81.3 min), not 30-min normalized"}
+  [PASS] metric_coverage    all metrics non-null or exempt
+  envelope: NONE — sizing run: no cpuset, threads unpinned
+
+== determinism [rocketride]
+  [SKIP] determinism        NOT_RUN — 1 rep(s): determinism not exercised; evidence grade SIZING, no publishable determinism claim
+
+== determinism [langgraph]
+  [SKIP] determinism        NOT_RUN — 1 rep(s): determinism not exercised; evidence grade SIZING, no publishable determinism claim
+
+== cross-arm (rep1 vs rep1)
+  [PASS] input_identity     498 docs, identical input bytes
+  [warn] frame_parity       20000LeaguesUndertheSea.mp4: 416 vs 395; ABucketofBlood.mp4: 264 vs 262; ACloseCallForBostonBlackie.mp4: 241 vs 240; ARomanceOfTheRedwoods.mp4: 371 vs 364; AStarIsBorn.mp4: 450 vs 444 — VFR-band; 46 exact
+  [PASS] detection_ratio    498 docs inside (0.9, 1.1)
+  [PASS] chunk_ratio        498 docs inside warn band (0.8, 1.25)
+  [warn] chunk_parity_tight per-video >1: ABucketOfBlood1959.mp4: 126 vs 120; ABucketofBlood.mp4: 166 vs 155; ACloseCallForBostonBlackie.mp4: 87 vs 85; ARomanceOfTheRedwoods.mp4: 102 vs 99; AStarIsBorn.mp4: 157 vs 153
+  workload_ratio_rr_over_lg: 1.026
+
+== verdict
+  validity_status: PASS (0 hard failures, 2 skipped gates)
+  determinism: NOT_RUN
+  evidence_grade: SIZING — single repetition, no determinism evidence; not a publishable comparison
