@@ -21,7 +21,7 @@ new compose services with their own names.
 | dimension | default (`rr_default_1token` / `lg_native_1process`) | **matched (`rr_matched_8x4` / `lg_matched_8x4_c32`)** |
 |---|---|---|
 | RR model processes | 1 task (one `use()`, `use_existing=True`) | **8 tasks** — 8 pipe copies, distinct `project_id`s, one `use()` each on its own client, no `use_existing`, no `threads=` |
-| RR inference per model | 1 at a time (engine device lock) | 1 at a time × 8 models |
+| RR inference per model | 1 at a time — a task is ONE asyncio event loop; `threads=` is `asyncio.Semaphore(threadCount)` on in-flight items (`data_conn.py`), so predicts run serially by construction (no lock: `make_device_lock` has no callers in 3.3.1; Whisper additionally has per-model locks) | 1 at a time × 8 models |
 | RR torch/BLAS | container env unset (in-process torch default = 16) | **six vars = 4** on the container, verified in every task's `/proc/<pid>/environ` |
 | RR pipeline TTL | 93,600 s (finite, > timeout) | **`ttl=0`** = no expiry (verified in engine source) |
 | RR ingestion | blast: ONE `send_files` batch | **sharded blast**: `index % 8` round-robin, 8 concurrent `send_files` released at a barrier |
@@ -180,6 +180,21 @@ New services (via `extends`, compose ≥ 2.20; the box runs v5.4):
 
 ## 8. Disclosed limits
 
+- **How RocketRide serializes a model (verified in the 3.3.1 image, corrects the
+  earlier "device lock" wording):** `make_device_lock()` exists but has **no
+  callers**; RF-DETR `predict` runs under `torch.no_grad()` with no lock, one
+  image at a time. A task process is a single asyncio event loop; the `threads=`
+  argument becomes `asyncio.Semaphore(threadCount)` in `modules/data/data_conn.py`
+  — it caps how many items are *in flight*, not how many run in parallel. The
+  synchronous node code (reader, predict, splitter, embed) therefore executes
+  one call at a time on that loop; parallelism inside a task comes only from
+  torch's intra-op threads within each forward pass. That is the per-task
+  ceiling (flat across threads=8…64) and why more tasks scale. Whisper (audio
+  lane, not in this benchmark pipe) additionally holds a per-model
+  `threading.Lock`. The LangGraph matched cell's per-worker predict lock is
+  therefore a fair match on inference serialization; note RocketRide serializes
+  the *whole* item pipeline on its loop while LangGraph matched lets extraction/
+  embedding overlap — LangGraph matched is the slightly more permissive of the two.
 - RocketRide torch **inter-op** threads inside engine task processes cannot be
   set or read (no env var; no code runs inside the task). Intra-op follows
   `OMP_NUM_THREADS=4` (verified via environ). Practically moot for RF-DETR's
