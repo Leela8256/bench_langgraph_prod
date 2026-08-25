@@ -36,17 +36,30 @@ def load_run(d):
     manifest = {}
     if (d / "manifest.json").exists():
         manifest = json.loads((d / "manifest.json").read_text())
+    # ENGINE cgroup only. The matched runner also drops driver_cgroup.csv (the
+    # client container, measured separately) beside it — merging two cumulative
+    # counters interleaves them and the windowed delta goes negative (bitten
+    # on the first matched smoke).
     sampler = []
-    for f in sorted(d.glob("*cgroup*.csv")):
+    files = [d / "engine_cgroup.csv"] if (d / "engine_cgroup.csv").exists() else \
+        [f for f in sorted(d.glob("*cgroup*.csv")) if "driver" not in f.name]
+    for f in files:
         for line in open(f):
             p = line.strip().split(",")
             if p and p[0].isdigit():
                 sampler.append(tuple(int(x) for x in p if x.lstrip("-").isdigit()))
+    driver = []
+    if (d / "driver_cgroup.csv").exists():
+        for line in open(d / "driver_cgroup.csv"):
+            p = line.strip().split(",")
+            if p and p[0].isdigit():
+                driver.append(tuple(int(x) for x in p if x.lstrip("-").isdigit()))
     progress = []
     if (d / "progress.jsonl").exists():
         progress = [json.loads(l) for l in open(d / "progress.jsonl")]
     return {"dir": str(d), "records": recs, "meta": meta,
-            "manifest": manifest, "sampler": sampler, "progress": progress}
+            "manifest": manifest, "sampler": sampler, "progress": progress,
+            "driver_sampler": driver}
 
 
 def gate_line(g):
@@ -112,6 +125,18 @@ def report_one(run):
     cpu = vm.cpu_from_sampler(run["sampler"], window)
     v3 = vm.v3_efficiency(run["records"], run["meta"], cpu)
     v4 = vm.v4_resources(run["records"], run["meta"], cpu)
+    # Driver-side CPU (client container), measured separately, never added to
+    # the arm; idle burden = engine cores in the post-warm-up quiet window.
+    if run.get("driver_sampler"):
+        dcpu = vm.cpu_from_sampler(run["driver_sampler"], window)
+        if dcpu:
+            v4["driver_cpu_s_in_window"] = dcpu["cpu_s"]
+            v4["driver_effective_cores"] = dcpu["effective_cores"]
+    idle = run["meta"].get("idle_window_epoch_ns")
+    if idle and run["sampler"]:
+        icpu = vm.cpu_from_sampler(run["sampler"], (idle[0] / 1e9, idle[1] / 1e9))
+        if icpu:
+            v4["idle_burden_cores"] = icpu["effective_cores"]
     v5 = vm.v5_cost(v1)
     for name, block in (("V1 throughput", v1), ("V2 latency", v2),
                         ("V3 efficiency", v3), ("V4 resources", v4),
