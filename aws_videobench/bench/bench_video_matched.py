@@ -56,6 +56,18 @@ ARM = "rocketride-docker-3.3.1-video"
 ENGINE_DEFAULT_ITEM_THREADS = 64      # CONST_DEFAULT_MAX_THREADS in the engine
 BLAS_VARS = ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS",
              "VECLIB_MAXIMUM_THREADS", "NUMEXPR_NUM_THREADS", "TORCH_NUM_THREADS")
+# What a RocketRide task process looks like (probed 2026-08-25 on engine
+# 3.3.1): child of the eaas.py server, cmdline
+#   /opt/rocketride/engine/engine /opt/rocketride/engine/ai/node.py \
+#       /tmp/task-<hash>.<source>-<id>.json --autoterm --monitor=app ...
+# One use() == one such process. Nothing in the container has "python" in
+# its cmdline (the engine binary is ./engine), hence this marker.
+TASK_MARKER = os.environ.get("RR_TASK_CMD_MARKER", "node.py /tmp/task-")
+
+
+def task_pids(snap: dict) -> set:
+    return {int(p) for p, c in (snap.get("cmd") or {}).items()
+            if TASK_MARKER in c and p.isdigit()}
 
 
 def redact(token: str) -> str:
@@ -157,8 +169,13 @@ async def main():
 
     # ---- task creation with per-call census (fail-closed) ----
     pre = await census_snapshot(census_dir, 0, want_env=False)
-    pids_before = set(pre["pids"])
-    clients, tokens, task_pids, env_readback = [], [], [], {}
+    pids_before = task_pids(pre)
+    if pids_before:
+        raise SystemExit(f"TASK CENSUS FAIL: {len(pids_before)} task process(es) already "
+                         f"alive before creation {sorted(pids_before)} — box not quiet "
+                         f"(stale ttl=0 tasks?)")
+    all_before = set(pre["pids"])
+    clients, tokens, task_pid_list, env_readback, task_cmdlines = [], [], [], {}, {}
     event_times = [dict() for _ in range(K)]
     event_actions = collections.Counter()
     run_t0 = time.perf_counter_ns()
@@ -198,7 +215,8 @@ async def main():
         except Exception as exc:
             print(f"[rrm] set_events unavailable on task {k} ({type(exc).__name__})", flush=True)
         snap = await census_snapshot(census_dir, k + 1, want_env=True)
-        new = sorted(set(snap["pids"]) - seen)
+        new = sorted(task_pids(snap) - seen)
+        extra = sorted(set(snap["pids"]) - all_before - task_pids(snap))
         if len(new) != 1:
             for cc, tt in zip(clients, tokens):
                 try:
@@ -206,11 +224,13 @@ async def main():
                 except Exception:
                     pass
             raise SystemExit(f"TASK CENSUS FAIL at task {k}: expected exactly 1 new "
-                             f"process, saw {len(new)} {new[:5]} — use() deduped or "
+                             f"task process ({TASK_MARKER!r}), saw {len(new)} {new[:5]}; "
+                             f"other new processes {extra[:5]} — use() deduped or "
                              f"spawned unexpectedly; aborting before warm-up")
         pid = new[0]
         seen.add(pid)
-        task_pids.append(pid)
+        task_pid_list.append(pid)
+        task_cmdlines[str(pid)] = (snap.get("cmd") or {}).get(str(pid), "")
         env = (snap.get("env") or {}).get(str(pid)) or {}
         env_readback[str(pid)] = env
         bad = [v for v in BLAS_VARS if env.get(v) != BLAS_THREADS]
@@ -223,7 +243,8 @@ async def main():
         raise SystemExit("TOKEN IDENTITY FAIL: tokens not distinct")
 
     census = {"declared_tasks": K, "task_pids_before": sorted(pids_before),
-              "task_pids_after": sorted(seen), "new_task_pids": task_pids,
+              "task_pids_after": sorted(seen), "new_task_pids": task_pid_list,
+              "task_cmdlines": task_cmdlines, "task_marker": TASK_MARKER,
               "project_ids": project_ids, "tokens_distinct": True,
               "token_digests": [redact(t) for t in tokens],
               "environ_readback": env_readback,
@@ -240,14 +261,14 @@ async def main():
                                   tokens[k]), timeout=TIMEOUT_S)
         items = res if isinstance(res, list) else [res]
         ok = sum(1 for it in items if isinstance(it, dict) and documents_from(it))
-        warm_records.append({"token_index": k, "task_pid": task_pids[k],
+        warm_records.append({"token_index": k, "task_pid": task_pid_list[k],
                              "fixtures": [p.name for p in warm_set], "docs_ok": ok,
                              "warm_s": round((time.perf_counter_ns() - tw) / 1e9, 1)})
         return ok
     warm_ok = await asyncio.gather(*[warm(k) for k in range(K)])
     for k, ok in enumerate(warm_ok):
         if ok < len(warm_set):
-            raise SystemExit(f"WARM FAIL: task {k} (pid {task_pids[k]}) returned "
+            raise SystemExit(f"WARM FAIL: task {k} (pid {task_pid_list[k]}) returned "
                              f"{ok}/{len(warm_set)} warm docs")
     for e in event_times:
         e.clear()
@@ -287,7 +308,7 @@ async def main():
         for j, (i, v) in enumerate(shards[k]):
             rec = base_record(v, durations)
             rec.update({"manifest_index": i, "token_index": k, "project_id": project_ids[k],
-                        "task_pid": task_pids[k], "shard_local_index": j,
+                        "task_pid": task_pid_list[k], "shard_local_index": j,
                         "submit_ns": t0, "timing_source": "batch_upload_time (derived, not measured)"})
             it = by_name.get(v.name)
             if isinstance(res, Exception) or it is None:
