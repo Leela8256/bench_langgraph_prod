@@ -59,9 +59,13 @@ sampler() {  # $1 container, $2 csv — cols: ts,cpu_usec,mem_current,pids,anon,
 # Container-side snapshot snippets (python processes only: the snapshot's own
 # sh/tr/cut children must not count as "new" processes). Plain variables — a
 # `case … )` inside $( ) trips bash 3.2's parser.
-RSS_SH='for p in /proc/[0-9]*; do c=$(tr "\0" " " < $p/cmdline 2>/dev/null | cut -c1-60); case "$c" in *python*) echo "${p#/proc/} $(grep VmRSS $p/status 2>/dev/null | awk "{print \$2}") $c";; esac; done'
-SNAP_SH='for p in /proc/[0-9]*; do c=$(tr "\0" " " < $p/cmdline 2>/dev/null | cut -c1-160); case "$c" in *python*) echo "${p#/proc/}|$c";; esac; done'
-ENV_SH='for p in /proc/[0-9]*; do c=$(tr "\0" " " < $p/cmdline 2>/dev/null); case "$c" in *python*) e=$(tr "\0" "\n" < $p/environ 2>/dev/null | grep -E "^(OMP_NUM_THREADS|MKL_NUM_THREADS|OPENBLAS_NUM_THREADS|VECLIB_MAXIMUM_THREADS|NUMEXPR_NUM_THREADS|TORCH_NUM_THREADS)=" | tr "\n" ";"); echo "${p#/proc/}|$e";; esac; done'
+# Every process except the snapshot shell itself ($$) and its children (xargs/
+# cut/awk) — the first smoke's "*python*" filter matched the snapshot's OWN
+# sh -c (its command text contains "python") and nothing else. NUL-separated
+# cmdline/environ go through xargs -0 (no backslash escapes to mangle).
+SNAP_SH='for p in /proc/[0-9]*; do pid=${p#/proc/}; [ "$pid" = "$$" ] && continue; pp=$(awk "{print \$4}" $p/stat 2>/dev/null); [ "$pp" = "$$" ] && continue; echo "$pid|ppid=$pp $(xargs -0 echo < $p/cmdline 2>/dev/null | cut -c1-160)"; done'
+ENV_SH='for p in /proc/[0-9]*; do pid=${p#/proc/}; [ "$pid" = "$$" ] && continue; pp=$(awk "{print \$4}" $p/stat 2>/dev/null); [ "$pp" = "$$" ] && continue; e=$(xargs -0 -n1 echo < $p/environ 2>/dev/null | grep -E "^(OMP_NUM_THREADS|MKL_NUM_THREADS|OPENBLAS_NUM_THREADS|VECLIB_MAXIMUM_THREADS|NUMEXPR_NUM_THREADS|TORCH_NUM_THREADS)=" | tr "\n" ";"); echo "$pid|$e"; done'
+RSS_SH='for p in /proc/[0-9]*; do pid=${p#/proc/}; [ "$pid" = "$$" ] && continue; pp=$(awk "{print \$4}" $p/stat 2>/dev/null); [ "$pp" = "$$" ] && continue; echo "$pid $(grep VmRSS $p/status 2>/dev/null | awk "{print \$2}") $(xargs -0 echo < $p/cmdline 2>/dev/null | cut -c1-60)"; done'
 rss_sampler() {  # $1 container, $2 log — per-PID RSS of python processes, every 60 s
   ( while docker inspect -f '{{.State.Running}}' "$1" 2>/dev/null | grep -q true; do
       echo "== $(date +%s)"
