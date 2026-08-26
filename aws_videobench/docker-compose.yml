@@ -90,6 +90,7 @@ services:
       LG_WORKERS: "${LG_WORKERS:-8}"
       LG_PORT_BASE: "${LG_PORT_BASE:-8201}"
       LG_PER_ENDPOINT_CONCURRENCY: "${LG_PER_ENDPOINT_CONCURRENCY:-4}"
+      LG_EXPECT_DETECT_CONC: "${LG_EXPECT_DETECT_CONC:-1}"   # readback gate: predicts allowed per process
       BENCH_IDLE_S: "${BENCH_IDLE_S:-30}"
       # Which pipe contract this run executes — default is the dual-lane
       # (audio+vision) pipe; run scripts override for variants like
@@ -120,13 +121,13 @@ services:
       service: rocketride
     container_name: videobench-rocketride-m8
     mem_limit: 58g
-    environment:
-      OMP_NUM_THREADS: "4"
-      MKL_NUM_THREADS: "4"
-      OPENBLAS_NUM_THREADS: "4"
-      VECLIB_MAXIMUM_THREADS: "4"
-      NUMEXPR_NUM_THREADS: "4"
-      TORCH_NUM_THREADS: "4"
+    environment:   # torch intra-op threads per task = RR_BLAS_THREADS (4 for 8x4, 5 for 6x5)
+      OMP_NUM_THREADS: "${RR_BLAS_THREADS:-4}"
+      MKL_NUM_THREADS: "${RR_BLAS_THREADS:-4}"
+      OPENBLAS_NUM_THREADS: "${RR_BLAS_THREADS:-4}"
+      VECLIB_MAXIMUM_THREADS: "${RR_BLAS_THREADS:-4}"
+      NUMEXPR_NUM_THREADS: "${RR_BLAS_THREADS:-4}"
+      TORCH_NUM_THREADS: "${RR_BLAS_THREADS:-4}"
 
   langgraph-matched:
     extends:
@@ -184,6 +185,28 @@ services:
       timeout: 10s
       retries: 120
       start_period: 120s
+
+  # IN-PROCESS cell (lg_inproc_6x5_c24): the ORDINARY single-uvicorn server with
+  # three knobs turned — torch 5/1, inference semaphore 6 (one process, ONE
+  # model copy, six concurrent predicts), BLAS/OMP = 5. Same math budget and
+  # inference concurrency as rr_matched_6x5, one process instead of six.
+  langgraph-inproc:
+    extends:
+      service: langgraph
+    container_name: videobench-langgraph-ip
+    mem_limit: 58g
+    environment:
+      OMP_NUM_THREADS: "${LG_TORCH_THREADS:-5}"
+      MKL_NUM_THREADS: "${LG_TORCH_THREADS:-5}"
+      OPENBLAS_NUM_THREADS: "${LG_TORCH_THREADS:-5}"
+      VECLIB_MAXIMUM_THREADS: "${LG_TORCH_THREADS:-5}"
+      NUMEXPR_NUM_THREADS: "${LG_TORCH_THREADS:-5}"
+      TORCH_NUM_THREADS: "${LG_TORCH_THREADS:-5}"
+      LG_TORCH_THREADS: "${LG_TORCH_THREADS:-5}"
+      LG_TORCH_INTEROP: "1"
+      LG_DETECT_CONCURRENCY_PER_PROCESS: "${LG_EXPECT_DETECT_CONC:-6}"
+      LG_PORT: "8200"
+      MALLOC_ARENA_MAX: "2"
 
 volumes:
   rr-model-cache:

@@ -36,7 +36,9 @@ export BENCH_TIMEOUT_S="${BENCH_TIMEOUT_S:-86400}"
 export RR_PIPE_TTL_S=0            # verified in engine source: 0 = no expiry
 export ROCKETRIDE_URI="ws://rocketride-matched:5565/task/service"
 export LG_HOST=langgraph-matched
-export RR_TASKS RR_BLAS_THREADS LG_TORCH_THREADS=4 LG_WORKERS=8 LG_PORT_BASE=8201 LG_PER_ENDPOINT_CONCURRENCY=4
+export RR_TASKS RR_BLAS_THREADS
+export LG_TORCH_THREADS="${LG_TORCH_THREADS:-4}" LG_WORKERS="${LG_WORKERS:-8}" LG_PORT_BASE="${LG_PORT_BASE:-8201}"
+export LG_PER_ENDPOINT_CONCURRENCY="${LG_PER_ENDPOINT_CONCURRENCY:-4}" LG_EXPECT_DETECT_CONC="${LG_EXPECT_DETECT_CONC:-1}"
 export RR_THREADS_PER_CONN="${RR_THREADS_PER_CONN:-}" RR_INFLIGHT_PER_TASK="${RR_INFLIGHT_PER_TASK:-4}"
 AWS_BIN="$(command -v aws || echo /usr/local/bin/aws)"
 [ -x "$AWS_BIN" ] || AWS_BIN="$HOME/.local/bin/aws"
@@ -242,11 +244,35 @@ run_lg1() {  # ONE-PORT cell: uvicorn --workers 8 on 8200, kernel-balanced
   docker compose stop langgraph-workers8 && docker compose rm -f langgraph-workers8
   echo "   LG one-port done (rc=$rc_lg)"
 }
+run_lgip() {  # IN-PROCESS cell: one uvicorn, one model copy, LG_EXPECT_DETECT_CONC concurrent predicts x LG_TORCH_THREADS
+  echo "== ARM LangGraph in-process (1 uvicorn, $LG_EXPECT_DETECT_CONC predicts x $LG_TORCH_THREADS threads, c$LG_PER_ENDPOINT_CONCURRENCY, $N docs)"
+  docker compose up -d langgraph-inproc
+  for i in $(seq 1 120); do
+    [ "$(docker inspect -f '{{.State.Health.Status}}' videobench-langgraph-ip 2>/dev/null)" = "healthy" ] && break
+    [ "$i" = 120 ] && { echo "FATAL: LG in-process service never ready"; docker compose logs --no-color langgraph-inproc | tail -40; exit 1; }
+    sleep 5
+  done
+  S1=$(sampler videobench-langgraph-ip "$OUT/lg/engine_cgroup.csv")
+  S2=$(rss_sampler videobench-langgraph-ip "$OUT/lg/rss_by_pid.log")
+  driver_sampler "$OUT/lg/driver_cgroup.csv"
+  CORPUS="$M8/measured" WARM="$M8/warm" LG_HOST=langgraph-inproc LG_PORT_BASE=8200 LG_WORKERS=1 \
+    docker compose run --rm smoke \
+    python /bench/lg_driver_matched.py /corpus "/results/$RUN/lg" "$N" /warm \
+    > "$OUT/lg/driver.log" 2>&1 || rc_lg=$?
+  kill "$S1" "$S2" 2>/dev/null || true
+  docker compose logs --no-color langgraph-inproc > "$OUT/lg/service.log" 2>&1 || true
+  docker compose stop langgraph-inproc && docker compose rm -f langgraph-inproc
+  echo "   LG in-process done (rc=$rc_lg)"
+}
 echo "== [5/6] arms in order: $ARM_ORDER"
+# Keepalive PAUSED for the arms phase: the box is busy (boot, warm-up, blast),
+# so the idle watchdog is no risk, and the busy loop must not tax measured spans.
+kill -STOP "$KEEPALIVE_PID" 2>/dev/null || true
 for arm in $ARM_ORDER; do
-  case "$arm" in rr) run_rr;; lg) run_lg;; lg1) run_lg1;; *) echo "FATAL: bad ARM_ORDER $arm" >&2; exit 1;; esac
+  case "$arm" in rr) run_rr;; lg) run_lg;; lg1) run_lg1;; lgip) run_lgip;; *) echo "FATAL: bad ARM_ORDER $arm" >&2; exit 1;; esac
   sleep 20   # settle between arms
 done
+kill -CONT "$KEEPALIVE_PID" 2>/dev/null || true
 
 echo "== [6/6] report + final sync"
 # Single-arm runs (ARM_ORDER=rr or lg) get a single-arm report; PAIR_RR / PAIR_LG

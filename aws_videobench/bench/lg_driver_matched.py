@@ -38,7 +38,11 @@ GLOBAL_C = W * PER_EP
 TIMEOUT_S = int(os.environ.get("BENCH_TIMEOUT_S", "86400"))
 TORCH_THREADS = int(os.environ.get("LG_TORCH_THREADS", "4"))
 IDLE_S = int(os.environ.get("BENCH_IDLE_S", "30"))
-POSTURE = f"lg_matched_{W}x{TORCH_THREADS}_c{GLOBAL_C}"
+# Expected predicts-at-once per process (readback gate). 1 = the 8-port matched
+# cell; N>1 with W=1 = the in-process cell (one model copy, N concurrent predicts).
+EXPECT_CONC = int(os.environ.get("LG_EXPECT_DETECT_CONC", "1"))
+POSTURE = (f"lg_inproc_{EXPECT_CONC}x{TORCH_THREADS}_c{GLOBAL_C}" if W == 1
+           else f"lg_matched_{W}x{TORCH_THREADS}_c{GLOBAL_C}")
 ARM = "langgraph-video-detect-v1"
 BLAS_VARS = ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS",
              "VECLIB_MAXIMUM_THREADS", "NUMEXPR_NUM_THREADS", "TORCH_NUM_THREADS")
@@ -124,8 +128,9 @@ def verify_readbacks():
             problems.append(f"pid {m.get('pid')}: env {bad} != {TORCH_THREADS}")
         if not (m.get("graph_compiled") and m.get("rfdetr_loaded") and m.get("minilm_loaded")):
             problems.append(f"pid {m.get('pid')}: models/graph not loaded {m}")
-        if m.get("detect_concurrency_per_process") != 1:
-            problems.append(f"pid {m.get('pid')}: detect concurrency {m.get('detect_concurrency_per_process')} != 1")
+        if m.get("detect_concurrency_per_process") != EXPECT_CONC:
+            problems.append(f"pid {m.get('pid')}: detect concurrency "
+                            f"{m.get('detect_concurrency_per_process')} != {EXPECT_CONC}")
     if problems:
         raise SystemExit("WORKER READBACK FAIL: " + "; ".join(problems[:6]))
     ck = {m.get("rfdetr_checkpoint_sha256") for m in metas}
@@ -271,7 +276,8 @@ async def main():
                            "expect_dim": 384, "bench_timeout_s": TIMEOUT_S,
                            "torch_threads_per_process": TORCH_THREADS,
                            "torch_interop_per_process": 1,
-                           "detect_concurrency_per_process": 1,
+                           "detect_concurrency_per_process": EXPECT_CONC,
+                           "model_copies": W,
                            "duration_authority": "ffmpeg-probed video stream",
                            "service_meta": metas[0]},
             "warm_records": warm_records, "warm_docs": len(warm_set) * W,
