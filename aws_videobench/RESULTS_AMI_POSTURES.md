@@ -9,7 +9,8 @@ single repetition, unpinned CPU envelope, not the publishable comparison.
 | RocketRide **default** (`rr_default_1token`) | `native170-20260822T070136Z/rr` (Run C) | measured |
 | LangGraph **default** (`lg_native_1process`) | `native170-20260822T070136Z/lg` (Run C) | measured |
 | RocketRide **matched 8×4** (`rr_matched_8x4`) | `matched8x4-ami-rep1-20260826T064153Z/rr` | measured 2026-08-26 |
-| LangGraph **matched 8×4** (`lg_matched_8x4_c32`) | — | built + smoke-passed, **not yet run** |
+| LangGraph **matched 8×4** (`lg_matched_8x4_c32`, 8 ports) | — | built + smoke-passed, **not yet run** |
+| LangGraph **one-port 8 workers** (`lg_workers8_1port_c32`) | `matched8x4-ami-rep1-20260826T075823Z/lg` | measured 2026-08-26 (paired with RR matched) |
 
 Raw records for every measured cell are committed under `runs/ami-postures/`
 (per-doc records, run manifests, cgroup samplers, progress, provenance, census,
@@ -60,34 +61,45 @@ Every number below is re-derivable: `python3 bench/report.py --arms <rr_dir> <lg
 - client **c32 = 8 endpoints × 4 active**, explicit 32-thread executor, `endpoint = index % 8`, barrier; both fixtures to every worker
 - pairs with the RR matched directory via `PAIR_RR`
 
+### 2.5 LangGraph one-port 8 workers — `lg_workers8_1port_c32` (2026-08-26)
+- The "obvious" deployment: 1 container `videobench-langgraph-w8`, **`uvicorn --workers 8` on ONE port (8200)** — eight worker processes share the socket, the **kernel** picks the worker at `accept()`; the client cannot address, warm or verify a specific worker
+- per-worker settings identical to the matched cell (six vars = 4, torch 4/1, one `predict` at a time per worker, 58 GB) — the only difference from `lg_matched_8x4_c32` is port layout / load balancing
+- verification as far as one port allows: `/meta` polled until 8 distinct pids answered (pids 8–15), each validated (torch 4/1, env, models, identical checkpoint); warm-up re-sent the two fixtures until every pid had served (32 warm requests, 2 rounds); 30 s idle window
+- client c32 global (explicit 32-thread executor, barrier); serving worker pid recorded per video
+- driver `bench/lg_driver_1port.py`; runner `run/matched8x4_ami.sh` (`ARM_ORDER=lg1`); commit `6d9ad0d`
+
+**Result (168/168, all gates PASS, workload_ratio vs RR matched 1.024):** span **3,434 s (57.2 min)**, **6.71 f/s / 100.7×**, effective cores **11.26 (35%)**, CPU-s/frame **1.68** (the lowest of any cell — little contention), CPU-s/footage-min 6.71, peak memory 24.9 GB, idle burden 1.1 cores, $14.18 / 1k footage-h, latency p50 233 s · p95 1,582 s · p99 2,174 s.
+**Kernel load skew reproduced — videos per worker pid: 49 / 43 / 29 / 15 / 14 / 11 / 4 / 3** (even share = 21; Ansh's WS-1 saw 48/29/28/25/19/7/7/5). The client held 32 requests in flight throughout (observed max 32), but with one inference at a time per worker and the kernel piling connections onto a few workers, on average only ~5 of 8 workers were busy — two-thirds of the box idle while a queue formed on the hot workers. This is a property of the serving stack, not of LangGraph's processing speed; the deterministic 8-port cell exists precisely to remove it.
+
 ## 3. Results — every metric, side by side
 
-| metric | RR default | LG default | **RR matched 8×4** | LG matched 8×4 |
-|---|---|---|---|---|
-| gates | all PASS | all PASS | all PASS + task_census 8/8 | pending |
-| span | 9,445 s (2.62 h) | 2,271 s (37.9 min) | **2,082 s (34.7 min)** | — |
-| **frames/s** | 2.44 | 10.15 | **11.07** | — |
-| × realtime | 37.4× | 155.7× | 166.1× | — |
-| videos/s | 0.018 | 0.074 | 0.081 | — |
-| chunks/s | 1.52 | 6.18 | 6.89 | — |
-| chunks / video | 85.5 | 83.5 | 85.4 | — |
-| effective cores | 5.98 | 26.84 | 23.87 | — |
-| scaling efficiency (of 32) | 18.7% | 83.9% | 74.6% | — |
-| threads activated | 4,049 | 2,932 | 13,513 | — |
-| **CPU-s / frame** | 2.53 | 2.73 | **2.16** | — |
-| CPU-s / footage-min | 9.91 | 10.66 | 8.62 | — |
-| CPU-s / video | 347 | 374 | 296 | — |
-| CPU-s / detection | 0.296 | 0.320 | 0.252 | — |
-| CPU-s / chunk | 4.06 | 4.48 | 3.46 | — |
-| peak memory (cgroup, incl. cache) | 42.9 GB | 28.8 GB | 57.4 GB (at limit) | — |
-| cold-to-ready | 138 s | 72 s | warm 250 s per task | — |
-| idle burden (cores, no work) | n/a | n/a | 3.9 | — |
-| driver CPU (separate) | n/a | n/a | 0.02 cores | — |
-| stage split | black box | frames 7% · detect 92% · embed 1% | black box | — |
-| latency basis | batch: TTFR 260 s; completion p50 5,565 s | per-request: p50 430 s · p95 708 s · p99 787 s | batch: TTFR 400 s; completion p50 1,992 s | — |
-| **$ / 1k footage-hours** ($1.428/h) | $38.15 | $9.17 | **$8.60** | — |
-| videos/day at 35-min mean | 1,537 | 6,393 | 6,972 | — |
-| evidence grade | SIZING | SIZING | SIZING | — |
+| metric | RR default | LG default | **RR matched 8×4** | LG one-port 8 workers | LG matched 8×4 (8 ports) |
+|---|---|---|---|---|---|
+| gates | all PASS | all PASS | all PASS + task_census 8/8 | all PASS | pending |
+| span | 9,445 s (2.62 h) | 2,271 s (37.9 min) | **2,082 s (34.7 min)** | 3,434 s (57.2 min) | — |
+| **frames/s** | 2.44 | 10.15 | **11.07** | 6.71 | — |
+| × realtime | 37.4× | 155.7× | 166.1× | 100.7× | — |
+| videos/s | 0.018 | 0.074 | 0.081 | 0.049 | — |
+| chunks/s | 1.52 | 6.18 | 6.89 | 4.08 | — |
+| chunks / video | 85.5 | 83.5 | 85.4 | 83.5 | — |
+| effective cores | 5.98 | 26.84 | 23.87 | 11.26 | — |
+| scaling efficiency (of 32) | 18.7% | 83.9% | 74.6% | 35.2% | — |
+| threads activated | 4,049 | 2,932 | 13,513 | 1,311 | — |
+| **CPU-s / frame** | 2.53 | 2.73 | **2.16** | **1.68** | — |
+| CPU-s / footage-min | 9.91 | 10.66 | 8.62 | 6.71 | — |
+| CPU-s / video | 347 | 374 | 296 | 230 | — |
+| CPU-s / detection | 0.296 | 0.320 | 0.252 | 0.197 | — |
+| CPU-s / chunk | 4.06 | 4.48 | 3.46 | 2.76 | — |
+| peak memory (cgroup, incl. cache) | 42.9 GB | 28.8 GB | 57.4 GB (at limit) | 24.9 GB | — |
+| cold-to-ready | 138 s | 72 s | warm 250 s per task | warm 2 rounds | — |
+| idle burden (cores, no work) | n/a | n/a | 3.9 | 1.1 | — |
+| driver CPU (separate) | n/a | n/a | 0.02 cores | 0.05 cores | — |
+| stage split | black box | frames 7% · detect 92% · embed 1% | black box | frames 2% · detect 98% · embed 1% | — |
+| latency basis | batch: TTFR 260 s; completion p50 5,565 s | per-request: p50 430 s · p95 708 s · p99 787 s | batch: TTFR 400 s; completion p50 1,992 s | per-request: p50 233 s · p95 1,582 s · p99 2,174 s | — |
+| **$ / 1k footage-hours** ($1.428/h) | $38.15 | $9.17 | **$8.60** | $14.18 | — |
+| videos/day at 35-min mean | 1,537 | 6,393 | 6,972 | 4,224 | — |
+| load distribution | 1 task | 1 process | 21 videos per task (dealt) | **49/43/29/15/14/11/4/3 per worker (kernel)** | — |
+| evidence grade | SIZING | SIZING | SIZING | SIZING | — |
 
 Latency rows are never compared across arms: batch completion and HTTP request latency are different semantics.
 

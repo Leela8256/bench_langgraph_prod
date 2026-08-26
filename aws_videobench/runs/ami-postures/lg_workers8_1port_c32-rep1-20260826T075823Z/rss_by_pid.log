@@ -1,0 +1,800 @@
+== 1787731168
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1226856 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1226684 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1228680 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1227624 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1228468 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1227780 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+484  
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1228308 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 1227388 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787731228
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1226952 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1226772 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1228736 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1227720 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1228568 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1227872 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1228428 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 1227512 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787731288
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1344600 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1351452 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1341312 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1379528 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1311496 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1227872 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+2677 24612 python -c import urllib.request,sys; sys.exit(0 if urllib.re
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1339528 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 1354596 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787731348
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1625324 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1339428 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1331520 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1434140 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1375952 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1227872 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1405448 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 1364176 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787731409
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1625324 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1353856 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1385500 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1434140 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1375952 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1227872 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1395744 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 1364176 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787731469
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1625324 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1369608 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1384120 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1434140 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1375952 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1227872 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1398180 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 1462564 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787731529
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1625324 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1369608 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1384120 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1434140 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1375952 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1227872 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 2593836 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 1462564 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787731589
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1625396 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1369244 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1384120 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1434156 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1375952 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1227880 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1432460 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 1462200 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787731649
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1551604 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1369244 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1384120 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1444248 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1394572 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1325116 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1432460 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 1462200 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787731709
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1554000 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1369248 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1384120 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1444248 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1474280 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1379708 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1432460 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 1486776 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787731769
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1536988 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1369248 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1384120 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1444248 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1474280 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1379708 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1678228 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 1486776 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787731829
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1528656 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1369248 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1384120 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1551688 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1474280 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1379708 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1678228 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 1486776 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787731889
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1532328 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1369248 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1384120 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1551688 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1474280 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1379708 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1678228 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 1486776 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787731950
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 2637772 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1369248 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1384120 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1551688 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1474280 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1379708 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1678228 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 1486776 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787732010
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 2637772 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1369248 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1384172 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1551116 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1474620 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1379708 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1677868 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 1512688 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787732070
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 2637772 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+10413 11612 python -c import urllib.request,sys; sys.exit(0 if urllib.re
+11 1378816 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1539768 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1551116 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1567384 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1383768 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1730444 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 1576472 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787732130
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 2637772 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1378824 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1607156 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1551116 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1599860 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1379044 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1638740 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 1557472 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787732190
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 2637772 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1391416 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1604548 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1551116 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1582892 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1554284 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1792140 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 1637424 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787732250
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 2637772 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1391416 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1535880 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1551116 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1617524 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1554032 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1774100 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 1637428 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787732310
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 2243440 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1391416 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1585984 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1551116 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1617528 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1554032 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1774548 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 1690748 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787732370
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 2152012 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1391416 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1627720 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1551116 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1617528 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1554032 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1774548 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 1729560 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787732430
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 2152012 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1391416 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1630476 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1551116 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1655384 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1554032 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1774548 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 1639864 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787732491
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 2152012 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1391416 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1633624 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1551116 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1655384 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1554032 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1774548 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 1776436 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787732551
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 2152400 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1459324 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1662668 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1551116 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13173 88844 /usr/bin/ffmpeg -nostdin -loglevel error -i /tmp/tmpeiztqjhg
+14 1655384 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1554032 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1774548 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 1776436 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787732611
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 2152400 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1459324 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1665152 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1551116 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1669408 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1554032 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1928152 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 1776436 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787732671
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1956100 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1391744 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1646016 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1551116 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1669688 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1554032 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1865152 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 1776604 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787732731
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1967108 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1408900 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1655576 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1551116 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1738832 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1554032 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15247 87596 /usr/bin/ffmpeg -nostdin -loglevel error -i /tmp/tmpz95u22u0
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1797784 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 1777152 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787732791
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1967108 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1481948 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1636212 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1551116 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1738600 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1554032 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1797784 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 1777412 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787732851
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1967108 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1481948 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1840428 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1551116 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1738604 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1554032 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+16381 5116 python -c import urllib.request,sys; sys.exit(0 if urllib.re
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1797784 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 1766344 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787732911
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1967284 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1481668 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1863436 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1551116 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1671256 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1554032 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1797784 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 1863768 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787732971
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 2029624 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1513636 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1863436 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1554500 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1673112 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1554032 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1797784 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 1863628 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787733032
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1966200 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1513636 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1863436 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1554500 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1673368 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1554032 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1850720 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 1864076 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787733092
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1966200 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1513636 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1851748 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1554500 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1673368 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1554032 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1850728 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 1864076 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787733152
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1966208 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1513636 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1875384 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1554500 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1673564 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1554032 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1850728 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 1864528 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787733212
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1968344 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1513636 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1875392 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1554500 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1796900 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1554032 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+19951 90844 /usr/bin/ffmpeg -nostdin -loglevel error -i /tmp/tmpqv75r_f2
+20065 90992 /usr/bin/ffmpeg -nostdin -loglevel error -i /tmp/tmp6r04moou
+20178 90976 /usr/bin/ffmpeg -nostdin -loglevel error -i /tmp/tmpct_pvsqg
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1950644 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 1864732 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787733272
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1968344 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1513636 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1961776 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1554500 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1696304 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1554032 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1950644 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 1903652 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787733332
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1969204 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1513636 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 2004772 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1554500 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1821248 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1554032 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+21230 88980 /usr/bin/ffmpeg -nostdin -loglevel error -i /tmp/tmp0j8ut2cy
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1950832 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 1903652 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787733392
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1969204 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1513636 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1941864 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1554504 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1722780 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1480300 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+21963 73668 /usr/bin/ffmpeg -nostdin -loglevel error -i /tmp/tmpsnaiiddb
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1960912 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 1930800 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787733452
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1969204 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1443820 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1941872 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1493624 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1722964 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1481728 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1961056 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 1989752 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787733512
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1969204 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1443820 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1991676 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1493624 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1674240 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1481728 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+23437 74540 /usr/bin/ffmpeg -nostdin -loglevel error -i /tmp/tmpwzk0vw6p
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1961056 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 2013020 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787733573
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1969204 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1443828 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1961608 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1493624 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1674240 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1481728 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1961056 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 2018216 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787733633
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1969204 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1543724 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1961764 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1493624 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 2140960 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1481728 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+24786 89312 /usr/bin/ffmpeg -nostdin -loglevel error -i /tmp/tmpk_wr2yr8
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 2093092 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 1948968 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787733693
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1994016 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 1694512 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1954912 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1493624 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1969064 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1481728 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 2093092 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 2219552 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787733753
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1994016 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 2163152 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1996244 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1494656 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1963956 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1481728 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+26257 89176 /usr/bin/ffmpeg -nostdin -loglevel error -i /tmp/tmp8wyto2_d
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 2093092 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 1949736 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787733813
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1994192 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 2163152 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1955060 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1494656 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1963756 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1481728 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+26885 89788 /usr/bin/ffmpeg -nostdin -loglevel error -i /tmp/tmp0uv1lfgi
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1961192 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 2008304 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787733873
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1994192 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 2163152 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1955040 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1494656 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1963756 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1481728 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1961192 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 2001556 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787733933
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1994544 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 2163152 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1955040 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1494656 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1938816 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1481728 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1961196 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 2034604 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787733993
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1994348 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 2163152 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 1954772 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1494656 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1939264 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1481728 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 2034860 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 2034864 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787734054
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1994348 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 2163152 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 2176736 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1494656 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1963712 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1481728 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1961264 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 2093208 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787734114
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1994348 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 2163152 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 2226640 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1494656 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1938820 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1481728 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+29618 89924 /usr/bin/ffmpeg -nostdin -loglevel error -i /tmp/tmp1jjfep6b
+29862 62828 /usr/bin/ffmpeg -nostdin -loglevel error -i /tmp/tmph0g59uqy
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 2035248 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 2244012 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787734174
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1994348 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 2163152 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 2226640 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1494656 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1938824 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1481728 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1960528 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 2234508 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787734234
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1994348 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 2172392 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 2226652 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1494656 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 2012612 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1485892 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+31103 89160 /usr/bin/ffmpeg -nostdin -loglevel error -i /tmp/tmpd3vqc3mg
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1960528 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 2216896 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787734294
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1994348 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 2172132 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 2188648 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1494656 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 2013144 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1485892 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1960528 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 2243156 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787734354
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1994348 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 2172132 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 2188648 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1494656 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 1986952 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1485892 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+32011 7296 python -c import urllib.request,sys; sys.exit(0 if urllib.re
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1960528 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 2262420 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787734414
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1994348 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 2172132 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 2188648 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1494656 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 2110092 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1485892 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1960528 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 2262420 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787734474
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1994348 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 2172132 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 2188648 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1494656 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 2110092 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1485892 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1960528 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 2262420 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787734535
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1994348 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 2172132 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 2188648 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1494656 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 2110092 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1485892 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1960528 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 2262420 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787734595
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1994348 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 2172132 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 2188648 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1494656 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 2110092 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1485892 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1960528 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 2341764 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787734655
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1994348 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 2172132 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 2188648 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1494656 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 2110092 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1485892 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1960528 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 2267836 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787734715
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1994348 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 2172132 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 2188648 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1494656 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 2110092 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1485892 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1960528 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 2267836 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787734775
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1994348 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 2172132 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 2188648 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1494656 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 2110092 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1485892 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1960528 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 2267836 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787734835
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1994348 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 2172132 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 2188648 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1494656 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 2110092 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1485892 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1960528 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 2574896 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787734895
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1994348 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 2172132 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 2188648 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1494656 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 2110092 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1485892 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1960528 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 2491816 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787734955
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1994348 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 2172132 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 2188648 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1494656 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 2110092 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1485892 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1960528 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 2588092 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787735015
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1994348 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 2172132 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 2188648 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1494656 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 2110092 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1485892 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1960528 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 2513948 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787735076
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1994348 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 2172132 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 2188648 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1494656 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 2110092 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1485892 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1960528 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 2521616 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787735136
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1994348 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 2172132 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 2188648 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1494656 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 2110092 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1485892 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1960528 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 2545932 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787735196
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1994348 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 2172132 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 2188648 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1494656 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 2110092 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1485892 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1960528 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 2643880 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787735256
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1994348 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 2172132 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 2188648 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1494656 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 2110092 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1485892 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1960528 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 2520860 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787735316
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1994348 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 2172132 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 2188648 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1494656 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 2110092 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1485892 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1960528 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 2667832 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+== 1787735376
+1 29476 /usr/local/bin/python3.12 /usr/local/bin/uvicorn service:app
+10 1994348 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+11 2172132 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+12 2188648 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+13 1494656 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+14 2110092 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+15 1485892 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+7 17088 /usr/local/bin/python3.12 -B -c from multiprocessing.resourc
+8 1960528 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
+9 2618744 /usr/local/bin/python3.12 -B -c from multiprocessing.spawn i
