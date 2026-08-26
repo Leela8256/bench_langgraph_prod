@@ -228,8 +228,23 @@ for arm in $ARM_ORDER; do
 done
 
 echo "== [6/6] report + final sync"
+# Single-arm runs (ARM_ORDER=rr or lg) get a single-arm report; PAIR_RR / PAIR_LG
+# point at an earlier arm directory to produce the paired cross-arm report later.
+RR_DIR="$OUT/rr"; LG_DIR="$OUT/lg"
+[ -n "${PAIR_RR:-}" ] && { RR_DIR="$PAIR_RR"; cp -r "$PAIR_RR" "$OUT/rr_paired"; }
+[ -n "${PAIR_LG:-}" ] && { LG_DIR="$PAIR_LG"; cp -r "$PAIR_LG" "$OUT/lg_paired"; }
 rc_rep=0
-python3 bench/report.py --arms "$OUT/rr" "$OUT/lg" > "$OUT/report.txt" 2>&1 || rc_rep=$?
+if [ -f "$RR_DIR/per_doc.jsonl" ] && [ -f "$LG_DIR/per_doc.jsonl" ]; then
+  python3 bench/report.py --arms "$RR_DIR" "$LG_DIR" > "$OUT/report.txt" 2>&1 || rc_rep=$?
+elif [ -f "$RR_DIR/per_doc.jsonl" ]; then
+  echo "   single-arm report: RocketRide only (pair later with PAIR_RR=$OUT/rr)"
+  python3 bench/report.py "$RR_DIR" > "$OUT/report.txt" 2>&1 || rc_rep=$?
+elif [ -f "$LG_DIR/per_doc.jsonl" ]; then
+  echo "   single-arm report: LangGraph only (pair later with PAIR_LG=$OUT/lg)"
+  python3 bench/report.py "$LG_DIR" > "$OUT/report.txt" 2>&1 || rc_rep=$?
+else
+  echo "   no arm produced records" > "$OUT/report.txt"; rc_rep=1
+fi
 cat "$OUT/report.txt"
 kill $SYNC_PID 2>/dev/null || true
 rc_sync=0
