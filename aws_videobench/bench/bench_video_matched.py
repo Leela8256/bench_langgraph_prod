@@ -283,12 +283,36 @@ async def main():
     idle_end = time.time_ns()
 
     # ---- barrier + K concurrent sharded blasts ----
+    # RR_INFLIGHT_PER_TASK bounds how many of a shard's videos are in flight on
+    # a task at once (default 4 = LangGraph matched's 4 requests per worker,
+    # 8x4 = 32 box-wide). 0 = one native batch per shard: the engine then
+    # admits up to threads=64 items per task, i.e. ~21 concurrent ffmpeg
+    # decoders PER TASK on AMI-168 — the first full run showed 114 decoders,
+    # memory pinned at the 58g limit and ~66x instead of ~180x. Admission is
+    # an ingestion-policy dimension, disclosed in shot_meta either way.
+    INFLIGHT = int(os.environ.get("RR_INFLIGHT_PER_TASK", "4") or 0)
+
     async def blast(k):
-        payload = [(str(v), {"doc_id": v.stem}) for _, v in shards[k]]
-        if not payload:
+        items = shards[k]
+        if not items:
             return []
-        return await asyncio.wait_for(clients[k].send_files(payload, tokens[k]),
-                                      timeout=TIMEOUT_S)
+        if INFLIGHT <= 0:
+            payload = [(str(v), {"doc_id": v.stem}) for _, v in items]
+            return await asyncio.wait_for(clients[k].send_files(payload, tokens[k]),
+                                          timeout=TIMEOUT_S)
+        sem = asyncio.Semaphore(INFLIGHT)
+
+        async def one(v):
+            async with sem:
+                try:
+                    r = await asyncio.wait_for(
+                        clients[k].send_files([(str(v), {"doc_id": v.stem})], tokens[k]),
+                        timeout=TIMEOUT_S)
+                    return r if isinstance(r, list) else [r]
+                except Exception as exc:          # attribute the failure to its file
+                    return [{"filepath": str(v), "error": f"{type(exc).__name__}: {exc}"[:250]}]
+        parts = await asyncio.gather(*[one(v) for _, v in items])
+        return [it for part in parts for it in part]
     coros = [blast(k) for k in range(K)]
     t0 = time.perf_counter_ns()
     results = await asyncio.gather(*coros, return_exceptions=True)
@@ -351,17 +375,26 @@ async def main():
         for rec in records:
             fh.write(json.dumps(rec) + "\n")
         fh.write(json.dumps({
-            "kind": "shot_meta", "arm": ARM, "posture": POSTURE, "mode": "sharded_blast",
+            "kind": "shot_meta", "arm": ARM, "posture": POSTURE,
+            "mode": f"sharded_blast_inflight{INFLIGHT}" if INFLIGHT > 0 else "sharded_blast",
+            "inflight_per_task": INFLIGHT,
+            "ingestion_note": (f"{INFLIGHT} videos in flight per task (client-bounded), "
+                               f"{K * INFLIGHT} box-wide" if INFLIGHT > 0 else
+                               "one native batch per shard; engine admits up to "
+                               "threads=64 items per task (unbounded decoder concurrency)"),
             "tasks": K, "n_docs": len(corpus), "ok_docs": ok_n,
             "span_s": round(span, 2),
             "measured_video_s": measured_video_s, "measured_source_s": measured_source_s,
             "measured_audio_s": measured_video_s,
             "realtime_factor": round(measured_video_s / span, 2) if span else None,
             "total_chunks": chunks, "timeout_s": TIMEOUT_S,
-            "offered_concurrency": K,
-            "offered_load_note": f"{K} parallel native batch calls (one per task) — "
-                                 f"native saturation interface, NOT numerically "
-                                 f"equivalent to LangGraph c32",
+            "offered_concurrency": K * INFLIGHT if INFLIGHT > 0 else K,
+            "offered_load_note": (f"{K} tasks x {INFLIGHT} videos in flight each, native "
+                                  f"send_files per video, whole backlog offered — "
+                                  if INFLIGHT > 0 else
+                                  f"{K} parallel native batch calls (one per task) — ")
+                                 + "native saturation interface, NOT numerically "
+                                   "equivalent to LangGraph c32",
             "pipe_sha256": hashlib.sha256(PIPE_SRC.read_bytes()).hexdigest(),
             "provenance": {"pipeline_kind": "detect", "interval_s": 15,
                            "detect_model": "rfdetr", "threshold": 0.3,
