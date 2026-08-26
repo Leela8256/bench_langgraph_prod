@@ -9,7 +9,8 @@ What is different from the default driver:
   - K (default 8) genuinely independent tasks: K runtime pipe copies, each
     with a distinct deterministic project_id, one use() per copy on its OWN
     client connection, NO use_existing (the server would return the existing
-    task — task identity is (owner, project_id, source)), NO threads= (that
+    task — task identity is (owner, project_id, source)), threads= only if
+    RR_THREADS_PER_CONN is set (that
     is per-task item concurrency, engine default 64, not torch threads)
   - ttl=0 = no expiry (task_server.py: "Tasks with ttl=0 have no timeout")
   - FAIL-CLOSED task census: after EACH use() the runner snapshots the engine
@@ -50,6 +51,13 @@ TIMEOUT_S = int(os.environ.get("BENCH_TIMEOUT_S", "86400"))
 K = int(os.environ.get("RR_TASKS", "8"))
 TTL_S = int(os.environ.get("RR_PIPE_TTL_S") or 0)
 BLAS_THREADS = os.environ.get("RR_BLAS_THREADS", "4")
+# RR_THREADS_PER_CONN: engine per-connection admission cap, passed as
+# use(threads=N). Per the engine team (rocketride-server#2053, 2026-08-26):
+# in-flight width = connections x threads, a slot held for each document's
+# whole open->write->close. Unset = omitted (engine default 64, how the
+# 2026-08-26 8x4 run ran). Validated 1-64 by the engine; 256 was rejected.
+_t = os.environ.get("RR_THREADS_PER_CONN", "").strip()
+ITEM_THREADS = int(_t) if _t else None
 IDLE_S = int(os.environ.get("BENCH_IDLE_S", "30"))
 POSTURE = f"rr_matched_{K}x{BLAS_THREADS}"
 ARM = "rocketride-docker-3.3.1-video"
@@ -206,7 +214,10 @@ async def main():
     for k in range(K):
         c = RocketRideClient(uri=URI, auth=APIKEY, on_event=make_on_event(k))
         await c.connect()
-        used = await c.use(filepath=str(pipe_paths[k]), ttl=TTL_S)   # no use_existing, no threads
+        use_kw = dict(filepath=str(pipe_paths[k]), ttl=TTL_S)        # no use_existing
+        if ITEM_THREADS is not None:
+            use_kw["threads"] = ITEM_THREADS                            # per-connection admission cap
+        used = await c.use(**use_kw)
         tok = used["token"]
         clients.append(c)
         tokens.append(tok)
@@ -381,7 +392,8 @@ async def main():
             "ingestion_note": (f"{INFLIGHT} videos in flight per task (client-bounded), "
                                f"{K * INFLIGHT} box-wide" if INFLIGHT > 0 else
                                "one native batch per shard; engine admits up to "
-                               "threads=64 items per task (unbounded decoder concurrency)"),
+                               f"threads={ITEM_THREADS or ENGINE_DEFAULT_ITEM_THREADS} items per task "
+                               f"(admission width {K * (ITEM_THREADS or ENGINE_DEFAULT_ITEM_THREADS)} box-wide)"),
             "tasks": K, "n_docs": len(corpus), "ok_docs": ok_n,
             "span_s": round(span, 2),
             "measured_video_s": measured_video_s, "measured_source_s": measured_source_s,
@@ -402,12 +414,15 @@ async def main():
                            "split": {"chunk_size": 4000, "overlap": 0},
                            "expect_dim": 384, "bench_timeout_s": TIMEOUT_S,
                            "rr_pipe_ttl_s": TTL_S, "ttl_semantics": "0 = no expiry (verified in engine source)",
-                           "threads_arg": "OMITTED",
+                           "threads_arg": ITEM_THREADS if ITEM_THREADS is not None else "OMITTED",
                            "engine_item_threads_expected_default": ENGINE_DEFAULT_ITEM_THREADS,
+                           "engine_item_threads_effective": ITEM_THREADS or ENGINE_DEFAULT_ITEM_THREADS,
+                           "admission_width_box": K * (ITEM_THREADS or ENGINE_DEFAULT_ITEM_THREADS),
+                           "admission_rule": "in-flight = connections x threads (engine team, #2053)",
                            "blas_omp_threads_per_task": BLAS_THREADS,
                            "torch_interop_per_task": "engine default (unverifiable)",
                            "duration_authority": "ffmpeg-probed video stream"},
-            "threads_requested": None,
+            "threads_requested": ITEM_THREADS,
             "task_census": census,
             "warm_records": warm_records, "warm_docs": len(warm_set) * K,
             "idle_window_epoch_ns": [idle_start, idle_end],

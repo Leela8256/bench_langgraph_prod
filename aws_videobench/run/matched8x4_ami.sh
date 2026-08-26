@@ -27,7 +27,8 @@ NWARM=2
 SRC="${SRC:-$HOME/bench_corpus_ami_full}"
 PIN=corpus/sets/ami_full.txt
 M8="$HOME/bench_corpus_ami_m8"
-RUN="matched8x4-ami-rep$REP-$STAMP"
+RR_TASKS="${RR_TASKS:-8}"; RR_BLAS_THREADS="${RR_BLAS_THREADS:-4}"
+RUN="matched${RR_TASKS}x${RR_BLAS_THREADS}-ami-rep$REP-$STAMP"
 OUT="results/$RUN"
 S3_DEST="s3://rocketride-benchmark-data/leela/videobench/$RUN/"
 export BENCH_PIPE=/pipe/benchmark_video_detect.pipe
@@ -35,7 +36,8 @@ export BENCH_TIMEOUT_S="${BENCH_TIMEOUT_S:-86400}"
 export RR_PIPE_TTL_S=0            # verified in engine source: 0 = no expiry
 export ROCKETRIDE_URI="ws://rocketride-matched:5565/task/service"
 export LG_HOST=langgraph-matched
-export RR_TASKS=8 RR_BLAS_THREADS=4 LG_TORCH_THREADS=4 LG_WORKERS=8 LG_PORT_BASE=8201 LG_PER_ENDPOINT_CONCURRENCY=4
+export RR_TASKS RR_BLAS_THREADS LG_TORCH_THREADS=4 LG_WORKERS=8 LG_PORT_BASE=8201 LG_PER_ENDPOINT_CONCURRENCY=4
+export RR_THREADS_PER_CONN="${RR_THREADS_PER_CONN:-}" RR_INFLIGHT_PER_TASK="${RR_INFLIGHT_PER_TASK:-4}"
 AWS_BIN="$(command -v aws || echo /usr/local/bin/aws)"
 [ -x "$AWS_BIN" ] || AWS_BIN="$HOME/.local/bin/aws"
 mkdir -p "$OUT/rr/census" "$OUT/lg" "$OUT/provenance" "$M8/measured" "$M8/warm"
@@ -172,7 +174,7 @@ docker compose run --rm --no-deps --entrypoint sh langgraph -c 'ffmpeg -version 
 docker compose run --rm --no-deps --entrypoint pip smoke show rocketride 2>/dev/null | grep -E "^Version" > "$PROV/rr_sdk_version.txt" || true
 sha256sum arms/rocketride/Dockerfile > "$PROV/rr_dockerfile.sha256" || true
 cp "$PIN" "$M8/measured/measured_order.txt" "$PROV/" || true
-{ echo "POSTURE=matched8x4_native ARM_ORDER=$ARM_ORDER REP=$REP N=$N WARM=$NWARM";
+{ echo "POSTURE=matched${RR_TASKS}x${RR_BLAS_THREADS}_native ARM_ORDER=$ARM_ORDER REP=$REP N=$N WARM=$NWARM RR_TASKS=$RR_TASKS RR_THREADS_PER_CONN=${RR_THREADS_PER_CONN:-OMITTED} RR_INFLIGHT_PER_TASK=$RR_INFLIGHT_PER_TASK";
   echo "RR: tasks=8 threads_arg=OMITTED(engine default item threads 64) ttl=0 BLAS/OMP=4 mem=58g sharded_blast";
   echo "LG: workers=8 ports=8201-8208 torch=4/1 detect_concurrency=1 c32=8x4 mem=58g";
   echo "BENCH_TIMEOUT_S=$BENCH_TIMEOUT_S"; } > "$PROV/run_config.txt"
@@ -183,7 +185,7 @@ trap 'kill $SYNC_PID $KEEPALIVE_PID 2>/dev/null || true' EXIT
 
 rc_rr=0; rc_lg=0
 run_rr() {
-  echo "== ARM RocketRide rr_matched_8x4 (sharded blast, 8 tasks, $N docs, warm x8)"
+  echo "== ARM RocketRide rr_matched_${RR_TASKS}x${RR_BLAS_THREADS} (sharded blast, $RR_TASKS tasks, threads=${RR_THREADS_PER_CONN:-OMITTED}, inflight=$RR_INFLIGHT_PER_TASK, $N docs, warm x$RR_TASKS)"
   docker compose up -d rocketride-matched
   for i in $(seq 1 90); do
     [ "$(docker inspect -f '{{.State.Health.Status}}' videobench-rocketride-m8 2>/dev/null)" = "healthy" ] && break

@@ -82,6 +82,10 @@ services:
       LG_URL: "${LG_URL:-http://langgraph:8200}"
       RR_TASKS: "${RR_TASKS:-8}"
       RR_BLAS_THREADS: "${RR_BLAS_THREADS:-4}"
+      # per-connection admission cap -> use(threads=N); empty = omitted (engine default 64)
+      RR_THREADS_PER_CONN: "${RR_THREADS_PER_CONN:-}"
+      # videos in flight per task, client-bounded; 0 = one native batch per shard
+      RR_INFLIGHT_PER_TASK: "${RR_INFLIGHT_PER_TASK:-4}"
       LG_TORCH_THREADS: "${LG_TORCH_THREADS:-4}"
       LG_WORKERS: "${LG_WORKERS:-8}"
       LG_PORT_BASE: "${LG_PORT_BASE:-8201}"
