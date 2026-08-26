@@ -1,0 +1,22 @@
+
+== results/matched8x4-ami-rep1-20260826T064153Z/rr  arm=rocketride-docker-3.3.1-video posture=rr_matched_8x4 mode=sharded_blast
+  [PASS] census             168/168 docs, all ok
+  [PASS] structure          384-dim finite normalized, counts consistent
+  [PASS] frame_law          168 docs within ±1
+  [PASS] self_duplication   no duplicate chunks in any doc
+  [PASS] corpus_pin         168 docs match the pinned shas (fail-closed)
+  [PASS] task_census        8/8 task processes, 8 project ids, environ readback for 8
+  V1 throughput: {"x_realtime": 166.08, "videos_per_s": 0.0807, "chunks_per_s": 6.894, "frames_per_s": 11.069, "chunks_per_video": 85.4, "frames_per_video": 137.2, "realtime_streams_sustainable": 166.1, "video_seconds": 345808.7, "footage_hours": 96.06, "span_s": 2082.22}
+  V2 latency: {"mode": "sharded_blast", "note": "batch span is exact; per-doc completion is batch-position (includes queue wait) \u2014 no service-latency claims", "batch_span_s": 2082.22, "time_to_first_result_s": 400.4, "time_to_first_result_basis": "first client-observed completion event within the batch \u2014 NOT comparable to an atomic batch API's first result without this basis string", "completion_curve_s": {"p50": 1991.8, "p90": 2355.1, "last": 2551.0}}
+  V3 efficiency: {"cpu_s_per_video": 295.9, "cpu_s_per_footage_min": 8.62, "cpu_s_per_frame": 2.156, "cpu_s_per_detection": 0.2523, "cpu_s_per_chunk": 3.463, "effective_cores": 23.87, "achieved_parallelism": 23.87, "threads_activated": 13513, "allocated_cores": 32, "scaling_efficiency": 0.746, "cpu_window_basis": "driver measurement markers, sampler interpolated at boundaries (\u00b115 s)", "note": "utilization is against the ARM'S ALLOCATION, averaged over the CPU window (see cpu_window_basis)"}
+  V4 resources: {"peak_mem_bytes": 57429315584, "peak_mem_note": "cgroup memory.current max \u2014 includes page cache", "cold_to_ready_s": null, "stage_split": "not decomposable (engine is a black box)", "driver_cpu_s_in_window": 47.9, "driver_effective_cores": 0.02, "idle_burden_cores": 3.9}
+  V5 cost: {"usd_per_1k_footage_hours": 8.6, "videos_per_day_per_box": 6972, "mean_measured_video_min": 34.3, "equivalent_30min_videos_per_day": 7971, "assumes": "$1.428/h instance; videos_per_day at the measured mean duration (34.3 min), not 30-min normalized"}
+  [PASS] metric_coverage    all metrics non-null or exempt
+  envelope: NONE — matched sizing run: all 32 vCPU, no cpuset; container memory limit per compose (rr_matched_8x4)
+
+  NOTE: single run — determinism unproven; not a benchmark result (sizing evidence only)
+
+== verdict
+  validity_status: PASS (0 hard failures, 0 skipped gates)
+  determinism: NOT_RUN
+  evidence_grade: SIZING — single repetition, no determinism evidence; not a publishable comparison

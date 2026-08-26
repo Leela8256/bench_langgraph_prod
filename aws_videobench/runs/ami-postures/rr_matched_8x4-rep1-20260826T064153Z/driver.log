@@ -1,0 +1,13 @@
+ Container aws_videobench-smoke-run-14fed6875886 Creating 
+ Container aws_videobench-smoke-run-14fed6875886 Created 
+[rrm] posture=rr_matched_8x4 tasks=8 corpus=168 docs (96.06 h probed), warm=['TS3012c.avi', 'TS3012d.avi'], ttl=0 (0 = no expiry), threads_arg=OMITTED (engine default item threads 64), blas_expected=4
+[rrm] task 0: project_id=videobench-matched8x4-00 token=4ddda9685f9e5a67 pid=679 environ OK (4 x6)
+[rrm] task 1: project_id=videobench-matched8x4-01 token=5b49757226fb575c pid=1592 environ OK (4 x6)
+[rrm] task 2: project_id=videobench-matched8x4-02 token=e8fa13d0d8fa68a3 pid=1962 environ OK (4 x6)
+[rrm] task 3: project_id=videobench-matched8x4-03 token=33ccc82b63f1b70c pid=2353 environ OK (4 x6)
+[rrm] task 4: project_id=videobench-matched8x4-04 token=58b6e7b3ee369141 pid=2800 environ OK (4 x6)
+[rrm] task 5: project_id=videobench-matched8x4-05 token=b4817bfbdf041459 pid=3277 environ OK (4 x6)
+[rrm] task 6: project_id=videobench-matched8x4-06 token=4058ed6bbe3bb4be pid=3805 environ OK (4 x6)
+[rrm] task 7: project_id=videobench-matched8x4-07 token=f6e9d33a3a5d973e pid=4443 environ OK (4 x6)
+[rrm] warm-up: all 8 tasks warmed on 2 fixtures (excluded from measurement)
+[rrm] DONE rr_matched_8x4: 168/168 ok, 14354 chunks, span=2082.2s (96.06 h -> 166.1x realtime)

@@ -1,0 +1,47 @@
+
+== /tmp/runc/rr  arm=rocketride-docker-3.3.1-video posture=default mode=blast
+  [PASS] census             168/168 docs, all ok
+  [PASS] structure          384-dim finite normalized, counts consistent
+  [PASS] frame_law          168 docs within ±1
+  [PASS] self_duplication   no duplicate chunks in any doc
+  [PASS] corpus_pin         168 docs match the pinned shas (fail-closed)
+  V1 throughput: {"x_realtime": 37.43, "videos_per_s": 0.0178, "chunks_per_s": 1.521, "frames_per_s": 2.44, "chunks_per_video": 85.5, "frames_per_video": 137.2, "realtime_streams_sustainable": 37.4, "video_seconds": 353500.2, "footage_hours": 98.19, "span_s": 9444.98}
+  V2 latency: {"mode": "blast", "note": "batch span is exact; per-doc completion is batch-position (includes queue wait) \u2014 no service-latency claims", "batch_span_s": 9444.98, "time_to_first_result_s": 260.3, "time_to_first_result_basis": "first client-observed completion event within the batch \u2014 NOT comparable to an atomic batch API's first result without this basis string", "completion_curve_s": {"p50": 5564.6, "p90": 9430.2, "last": 9710.6}}
+  V3 efficiency: {"cpu_s_per_video": 347.4, "cpu_s_per_footage_min": 9.91, "cpu_s_per_frame": 2.532, "cpu_s_per_detection": 0.2962, "cpu_s_per_chunk": 4.063, "effective_cores": 5.98, "achieved_parallelism": 5.98, "threads_activated": 4049, "allocated_cores": 32, "scaling_efficiency": 0.187, "cpu_window_basis": "full sampler span \u2014 INCLUDES warm-up and driver startup; CPU figures are approximate for measured-interval claims", "note": "utilization is against the ARM'S ALLOCATION, averaged over the CPU window (see cpu_window_basis)"}
+  V4 resources: {"peak_mem_bytes": 42942898176, "peak_mem_note": "cgroup memory.current max \u2014 includes page cache", "cold_to_ready_s": 137.744385712, "stage_split": "not decomposable (engine is a black box)"}
+  V5 cost: {"usd_per_1k_footage_hours": 38.15, "videos_per_day_per_box": 1537, "mean_measured_video_min": 35.0, "equivalent_30min_videos_per_day": 1796, "assumes": "$1.428/h instance; videos_per_day at the measured mean duration (35.0 min), not 30-min normalized"}
+  [PASS] metric_coverage    all metrics non-null or exempt
+  envelope: NONE — sizing run: no cpuset, engine threads unpinned
+
+== /tmp/runc/lg  arm=langgraph-video-detect-v1 posture=default mode=c32
+  [PASS] census             168/168 docs, all ok
+  [PASS] structure          384-dim finite normalized, counts consistent
+  [PASS] frame_law          168 docs within ±1
+  [PASS] self_duplication   no duplicate chunks in any doc
+  [PASS] corpus_pin         168 docs match the pinned shas (fail-closed)
+  V1 throughput: {"x_realtime": 155.65, "videos_per_s": 0.074, "chunks_per_s": 6.176, "frames_per_s": 10.148, "chunks_per_video": 83.5, "frames_per_video": 137.2, "realtime_streams_sustainable": 155.6, "video_seconds": 353500.2, "footage_hours": 98.19, "span_s": 2271.19}
+  V2 latency: {"mode": "c32", "service_latency_s": {"p50": 429.92, "p95": 707.94, "p99": 787.17}, "latency_s_per_footage_min": 12.084, "failed_items": 0, "time_to_first_result_s": 18.4, "time_to_first_result_basis": "first completed request (per-item mode)"}
+  V3 efficiency: {"cpu_s_per_video": 373.8, "cpu_s_per_footage_min": 10.66, "cpu_s_per_frame": 2.725, "cpu_s_per_detection": 0.3204, "cpu_s_per_chunk": 4.477, "effective_cores": 26.84, "achieved_parallelism": 26.84, "threads_activated": 2932, "allocated_cores": 32, "scaling_efficiency": 0.839, "cpu_window_basis": "full sampler span \u2014 INCLUDES warm-up and driver startup; CPU figures are approximate for measured-interval claims", "note": "utilization is against the ARM'S ALLOCATION, averaged over the CPU window (see cpu_window_basis)"}
+  V4 resources: {"peak_mem_bytes": 28812754944, "peak_mem_note": "cgroup memory.current max \u2014 includes page cache", "cold_to_ready_s": 71.942095038, "lg_stage_split": {"frames_s": "7%", "detect_s": "92%", "chunk_s": "0%", "embed_s": "1%"}, "lg_framework_overhead_s": 1.35}
+  V5 cost: {"usd_per_1k_footage_hours": 9.17, "videos_per_day_per_box": 6393, "mean_measured_video_min": 35.1, "equivalent_30min_videos_per_day": 7471, "assumes": "$1.428/h instance; videos_per_day at the measured mean duration (35.1 min), not 30-min normalized"}
+  [PASS] metric_coverage    all metrics non-null or exempt
+  envelope: NONE — sizing run: no cpuset, threads unpinned
+
+== determinism [rocketride]
+  [SKIP] determinism        NOT_RUN — 1 rep(s): determinism not exercised; evidence grade SIZING, no publishable determinism claim
+
+== determinism [langgraph]
+  [SKIP] determinism        NOT_RUN — 1 rep(s): determinism not exercised; evidence grade SIZING, no publishable determinism claim
+
+== cross-arm (rep1 vs rep1)
+  [PASS] input_identity     168 docs, identical input bytes
+  [PASS] frame_parity       168 docs, frame counts identical
+  [PASS] detection_ratio    168 docs inside (0.9, 1.1)
+  [PASS] chunk_ratio        168 docs inside warn band (0.8, 1.25)
+  [warn] chunk_parity_tight per-video >1: EN2001b.avi: 47 vs 45; EN2002a.avi: 26 vs 24; EN2005a.avi: 41 vs 39; EN2006a.avi: 31 vs 29; EN2009b.avi: 21 vs 19
+  workload_ratio_rr_over_lg: 1.024
+
+== verdict
+  validity_status: PASS (0 hard failures, 2 skipped gates)
+  determinism: NOT_RUN
+  evidence_grade: SIZING — single repetition, no determinism evidence; not a publishable comparison

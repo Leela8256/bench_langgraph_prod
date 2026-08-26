@@ -1,0 +1,123 @@
+{
+ "declared_tasks": 8,
+ "task_pids_before": [],
+ "task_pids_after": [
+  679,
+  1592,
+  1962,
+  2353,
+  2800,
+  3277,
+  3805,
+  4443
+ ],
+ "new_task_pids": [
+  679,
+  1592,
+  1962,
+  2353,
+  2800,
+  3277,
+  3805,
+  4443
+ ],
+ "task_cmdlines": {
+  "679": "ppid=1 /opt/rocketride/engine/engine /opt/rocketride/engine/ai/node.py /tmp/task-035bde52.webhook_1-kdj8aycu.json --autoterm --monitor=app --debug_port=20000 --debug_h",
+  "1592": "ppid=1 /opt/rocketride/engine/engine /opt/rocketride/engine/ai/node.py /tmp/task-1f0669bd.webhook_1-zw_z83__.json --autoterm --monitor=app --debug_port=20002 --debug_h",
+  "1962": "ppid=1 /opt/rocketride/engine/engine /opt/rocketride/engine/ai/node.py /tmp/task-ab2a6bf8.webhook_1-qiegkuvw.json --autoterm --monitor=app --debug_port=20004 --debug_h",
+  "2353": "ppid=1 /opt/rocketride/engine/engine /opt/rocketride/engine/ai/node.py /tmp/task-dcddaca7.webhook_1-bp8ugvrs.json --autoterm --monitor=app --debug_port=20006 --debug_h",
+  "2800": "ppid=1 /opt/rocketride/engine/engine /opt/rocketride/engine/ai/node.py /tmp/task-a8d88cde.webhook_1-jbiscwfi.json --autoterm --monitor=app --debug_port=20008 --debug_h",
+  "3277": "ppid=1 /opt/rocketride/engine/engine /opt/rocketride/engine/ai/node.py /tmp/task-c744ccfd.webhook_1-v39d6i29.json --autoterm --monitor=app --debug_port=20010 --debug_h",
+  "3805": "ppid=1 /opt/rocketride/engine/engine /opt/rocketride/engine/ai/node.py /tmp/task-3cf5b127.webhook_1-rnad0xyg.json --autoterm --monitor=app --debug_port=20012 --debug_h",
+  "4443": "ppid=1 /opt/rocketride/engine/engine /opt/rocketride/engine/ai/node.py /tmp/task-6a2b3743.webhook_1-232tqs91.json --autoterm --monitor=app --debug_port=20014 --debug_h"
+ },
+ "task_marker": "node.py /tmp/task-",
+ "project_ids": [
+  "videobench-matched8x4-00",
+  "videobench-matched8x4-01",
+  "videobench-matched8x4-02",
+  "videobench-matched8x4-03",
+  "videobench-matched8x4-04",
+  "videobench-matched8x4-05",
+  "videobench-matched8x4-06",
+  "videobench-matched8x4-07"
+ ],
+ "tokens_distinct": true,
+ "token_digests": [
+  "4ddda9685f9e5a67",
+  "5b49757226fb575c",
+  "e8fa13d0d8fa68a3",
+  "33ccc82b63f1b70c",
+  "58b6e7b3ee369141",
+  "b4817bfbdf041459",
+  "4058ed6bbe3bb4be",
+  "f6e9d33a3a5d973e"
+ ],
+ "environ_readback": {
+  "679": {
+   "OPENBLAS_NUM_THREADS": "4",
+   "VECLIB_MAXIMUM_THREADS": "4",
+   "TORCH_NUM_THREADS": "4",
+   "NUMEXPR_NUM_THREADS": "4",
+   "MKL_NUM_THREADS": "4",
+   "OMP_NUM_THREADS": "4"
+  },
+  "1592": {
+   "OPENBLAS_NUM_THREADS": "4",
+   "VECLIB_MAXIMUM_THREADS": "4",
+   "TORCH_NUM_THREADS": "4",
+   "NUMEXPR_NUM_THREADS": "4",
+   "MKL_NUM_THREADS": "4",
+   "OMP_NUM_THREADS": "4"
+  },
+  "1962": {
+   "OPENBLAS_NUM_THREADS": "4",
+   "VECLIB_MAXIMUM_THREADS": "4",
+   "TORCH_NUM_THREADS": "4",
+   "NUMEXPR_NUM_THREADS": "4",
+   "MKL_NUM_THREADS": "4",
+   "OMP_NUM_THREADS": "4"
+  },
+  "2353": {
+   "OPENBLAS_NUM_THREADS": "4",
+   "VECLIB_MAXIMUM_THREADS": "4",
+   "TORCH_NUM_THREADS": "4",
+   "NUMEXPR_NUM_THREADS": "4",
+   "MKL_NUM_THREADS": "4",
+   "OMP_NUM_THREADS": "4"
+  },
+  "2800": {
+   "OPENBLAS_NUM_THREADS": "4",
+   "VECLIB_MAXIMUM_THREADS": "4",
+   "TORCH_NUM_THREADS": "4",
+   "NUMEXPR_NUM_THREADS": "4",
+   "MKL_NUM_THREADS": "4",
+   "OMP_NUM_THREADS": "4"
+  },
+  "3277": {
+   "OPENBLAS_NUM_THREADS": "4",
+   "VECLIB_MAXIMUM_THREADS": "4",
+   "TORCH_NUM_THREADS": "4",
+   "NUMEXPR_NUM_THREADS": "4",
+   "MKL_NUM_THREADS": "4",
+   "OMP_NUM_THREADS": "4"
+  },
+  "3805": {
+   "OPENBLAS_NUM_THREADS": "4",
+   "VECLIB_MAXIMUM_THREADS": "4",
+   "TORCH_NUM_THREADS": "4",
+   "NUMEXPR_NUM_THREADS": "4",
+   "MKL_NUM_THREADS": "4",
+   "OMP_NUM_THREADS": "4"
+  },
+  "4443": {
+   "OPENBLAS_NUM_THREADS": "4",
+   "VECLIB_MAXIMUM_THREADS": "4",
+   "TORCH_NUM_THREADS": "4",
+   "NUMEXPR_NUM_THREADS": "4",
+   "MKL_NUM_THREADS": "4",
+   "OMP_NUM_THREADS": "4"
+  }
+ },
+ "torch_interop_readback": "UNVERIFIABLE \u2014 engine task process; not settable via env, disclosed"
+}

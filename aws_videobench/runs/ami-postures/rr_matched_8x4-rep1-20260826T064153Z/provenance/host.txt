@@ -1,0 +1,15 @@
+Linux ip-172-31-1-58 6.8.0-1063-aws #66~22.04.1-Ubuntu SMP Fri Aug  7 17:45:18 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+32
+Architecture:                            x86_64
+CPU op-mode(s):                          32-bit, 64-bit
+Address sizes:                           46 bits physical, 48 bits virtual
+Byte Order:                              Little Endian
+CPU(s):                                  32
+On-line CPU(s) list:                     0-31
+Vendor ID:                               GenuineIntel
+Model name:                              Intel(R) Xeon(R) Platinum 8488C
+CPU family:                              6
+Model:                                   143
+Thread(s) per core:                      2
+Core(s) per socket:                      16
+Docker Compose version v5.4.0

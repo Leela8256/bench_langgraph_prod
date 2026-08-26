@@ -1,0 +1,4 @@
+POSTURE=matched8x4_native ARM_ORDER=rr REP=1 N=168 WARM=2
+RR: tasks=8 threads_arg=OMITTED(engine default item threads 64) ttl=0 BLAS/OMP=4 mem=58g sharded_blast
+LG: workers=8 ports=8201-8208 torch=4/1 detect_concurrency=1 c32=8x4 mem=58g
+BENCH_TIMEOUT_S=86400
