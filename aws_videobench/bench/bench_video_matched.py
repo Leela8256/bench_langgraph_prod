@@ -171,8 +171,10 @@ async def main():
 
     print(f"[rrm] posture={POSTURE} tasks={K} corpus={len(corpus)} docs "
           f"({measured_video_s/3600:.2f} h probed), warm={[w.name for w in warm_set]}, "
-          f"ttl={TTL_S} (0 = no expiry), threads_arg=OMITTED "
-          f"(engine default item threads {ENGINE_DEFAULT_ITEM_THREADS}), "
+          f"ttl={TTL_S} (0 = no expiry), "
+          f"threads_arg={ITEM_THREADS if ITEM_THREADS is not None else 'OMITTED'} "
+          f"(effective item threads {ITEM_THREADS or ENGINE_DEFAULT_ITEM_THREADS}, "
+          f"admission width {K * (ITEM_THREADS or ENGINE_DEFAULT_ITEM_THREADS)} box-wide), "
           f"blas_expected={BLAS_THREADS}", flush=True)
 
     # ---- task creation with per-call census (fail-closed) ----
