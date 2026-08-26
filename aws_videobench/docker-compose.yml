@@ -79,6 +79,7 @@ services:
       ROCKETRIDE_APIKEY: local-dev
       # matched posture (bench_video_matched.py / lg_driver_matched.py)
       LG_HOST: "${LG_HOST:-langgraph}"
+      LG_URL: "${LG_URL:-http://langgraph:8200}"
       RR_TASKS: "${RR_TASKS:-8}"
       RR_BLAS_THREADS: "${RR_BLAS_THREADS:-4}"
       LG_TORCH_THREADS: "${LG_TORCH_THREADS:-4}"
@@ -145,6 +146,36 @@ services:
     healthcheck:
       test: ["CMD", "python", "-c",
              "import urllib.request,sys; [urllib.request.urlopen(f'http://127.0.0.1:{p}/health/ready',timeout=3) for p in range(8201,8209)]"]
+      interval: 15s
+      timeout: 10s
+      retries: 120
+      start_period: 120s
+
+  # ONE-PORT multi-worker cell (the "obvious" deployment): uvicorn --workers 8
+  # on 8200, kernel-balanced. Same per-worker settings as langgraph-matched so
+  # the only difference is port layout / load balancing.
+  langgraph-workers8:
+    extends:
+      service: langgraph
+    container_name: videobench-langgraph-w8
+    command: ["uvicorn", "service:app", "--host", "0.0.0.0", "--port", "8200", "--workers", "8"]
+    mem_limit: 58g
+    environment:
+      OMP_NUM_THREADS: "4"
+      MKL_NUM_THREADS: "4"
+      OPENBLAS_NUM_THREADS: "4"
+      VECLIB_MAXIMUM_THREADS: "4"
+      NUMEXPR_NUM_THREADS: "4"
+      TORCH_NUM_THREADS: "4"
+      LG_TORCH_THREADS: "4"
+      LG_TORCH_INTEROP: "1"
+      LG_DETECT_CONCURRENCY_PER_PROCESS: "1"
+      LG_WORKERS: "8"
+      LG_PORT: "8200"
+      MALLOC_ARENA_MAX: "2"
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8200/health/ready',timeout=3).status==200 else 1)"]
       interval: 15s
       timeout: 10s
       retries: 120

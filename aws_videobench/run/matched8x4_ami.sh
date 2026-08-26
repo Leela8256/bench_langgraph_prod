@@ -221,9 +221,28 @@ run_lg() {
   docker compose stop langgraph-matched && docker compose rm -f langgraph-matched
   echo "   LG done (rc=$rc_lg)"
 }
+run_lg1() {  # ONE-PORT cell: uvicorn --workers 8 on 8200, kernel-balanced
+  echo "== ARM LangGraph lg_workers8_1port_c32 (uvicorn --workers 8, one port, c32, $N docs)"
+  docker compose up -d langgraph-workers8
+  for i in $(seq 1 120); do
+    [ "$(docker inspect -f '{{.State.Health.Status}}' videobench-langgraph-w8 2>/dev/null)" = "healthy" ] && break
+    [ "$i" = 120 ] && { echo "FATAL: LG one-port service never ready"; docker compose logs --no-color langgraph-workers8 | tail -40; exit 1; }
+    sleep 5
+  done
+  S1=$(sampler videobench-langgraph-w8 "$OUT/lg/engine_cgroup.csv")
+  S2=$(rss_sampler videobench-langgraph-w8 "$OUT/lg/rss_by_pid.log")
+  driver_sampler "$OUT/lg/driver_cgroup.csv"
+  CORPUS="$M8/measured" WARM="$M8/warm" LG_URL="http://langgraph-workers8:8200" docker compose run --rm smoke \
+    python /bench/lg_driver_1port.py /corpus "/results/$RUN/lg" "$N" /warm \
+    > "$OUT/lg/driver.log" 2>&1 || rc_lg=$?
+  kill "$S1" "$S2" 2>/dev/null || true
+  docker compose logs --no-color langgraph-workers8 > "$OUT/lg/service.log" 2>&1 || true
+  docker compose stop langgraph-workers8 && docker compose rm -f langgraph-workers8
+  echo "   LG one-port done (rc=$rc_lg)"
+}
 echo "== [5/6] arms in order: $ARM_ORDER"
 for arm in $ARM_ORDER; do
-  case "$arm" in rr) run_rr;; lg) run_lg;; *) echo "FATAL: bad ARM_ORDER $arm" >&2; exit 1;; esac
+  case "$arm" in rr) run_rr;; lg) run_lg;; lg1) run_lg1;; *) echo "FATAL: bad ARM_ORDER $arm" >&2; exit 1;; esac
   sleep 20   # settle between arms
 done
 
