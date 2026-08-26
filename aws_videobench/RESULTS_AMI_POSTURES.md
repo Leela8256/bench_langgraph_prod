@@ -71,6 +71,11 @@ Every number below is re-derivable: `python3 bench/report.py --arms <rr_dir> <lg
 **Result (168/168, all gates PASS, workload_ratio vs RR matched 1.024):** span **3,434 s (57.2 min)**, **6.71 f/s / 100.7×**, effective cores **11.26 (35%)**, CPU-s/frame **1.68** (the lowest of any cell — little contention), CPU-s/footage-min 6.71, peak memory 24.9 GB, idle burden 1.1 cores, $14.18 / 1k footage-h, latency p50 233 s · p95 1,582 s · p99 2,174 s.
 **Kernel load skew reproduced — videos per worker pid: 49 / 43 / 29 / 15 / 14 / 11 / 4 / 3** (even share = 21; Ansh's WS-1 saw 48/29/28/25/19/7/7/5). The client held 32 requests in flight throughout (observed max 32), but with one inference at a time per worker and the kernel piling connections onto a few workers, on average only ~5 of 8 workers were busy — two-thirds of the box idle while a queue formed on the hot workers. This is a property of the serving stack, not of LangGraph's processing speed; the deterministic 8-port cell exists precisely to remove it.
 
+### 2.6 RocketRide matched — `rr_matched_6x4` with `threads=32` per connection (2026-08-26, run `matched6x4-ami-rep1-20260826T155110Z/rr`)
+- identical to §2.3 except: **6 tasks** (6 connections, `project_id` `videobench-matched6x4-00…05`, 28 videos per shard) and **`use(threads=32)` on every connection** — the first cell with the engine's per-connection admission cap set explicitly (engine team, rocketride-server#2053: in-flight width = connections × threads). Engine-side proof: each task's `/tmp/task-*.json` carries `"threadCount": 32`; provenance `threads_arg: 32`, `engine_item_threads_effective: 32`, `admission_width_box: 192`.
+- 192 admission slots ≥ 168 videos → the whole corpus was admitted at the barrier (threads non-binding at 28 videos/shard); one native batch per shard (`RR_INFLIGHT_PER_TASK=0`), BLAS/OMP = 4, `ttl=0`, `mem_limit 58g`. task_census PASS 6/6.
+- driver knob added this run: `RR_THREADS_PER_CONN` (`bench/bench_video_matched.py`, commits `8fb65e2`, `d23edf0`); runner honors `RR_TASKS` overrides.
+
 ## 3. Results — every metric, side by side
 
 | metric | RR default | LG default | **RR matched 8×4** | LG one-port 8 workers | LG matched 8×4 (8 ports) |
@@ -102,6 +107,28 @@ Every number below is re-derivable: `python3 bench/report.py --arms <rr_dir> <lg
 | evidence grade | SIZING | SIZING | SIZING | SIZING | — |
 
 Latency rows are never compared across arms: batch completion and HTTP request latency are different semantics.
+
+
+### 3.1 RocketRide matched: 8 tasks / threads default 64 vs 6 tasks / threads 32 (same corpus, same day)
+
+| metric | `rr_matched_8x4` (8 conn × 64 = 512 slots) | **`rr_matched_6x4` threads=32 (6 conn × 32 = 192 slots)** |
+|---|---|---|
+| gates | all PASS + task_census 8/8 | all PASS + task_census 6/6 |
+| span | 2,082 s (34.7 min) | **1,951 s (32.5 min)** |
+| frames/s · × realtime | 11.07 · 166.1× | **11.81 · 177.2×** |
+| videos/s · chunks/s | 0.081 · 6.89 | 0.086 · 7.36 |
+| chunks / video · frames / video | 85.4 · 137.2 | 85.4 · 137.2 (identical work) |
+| effective cores (of 32) · scaling eff. | 23.87 · 74.6% | 21.39 · 66.8% |
+| threads activated | 13,513 | 13,653 |
+| CPU-s / frame · / footage-min · / video | 2.16 · 8.62 · 296 | **1.81 · 7.24 · 248** |
+| CPU-s / detection · / chunk | 0.252 · 3.46 | 0.212 · 2.91 |
+| peak memory (cgroup, incl. cache) | 57.4 GB (at limit) | 57.2 GB (at limit) |
+| idle burden · driver CPU | 3.9 · 0.02 cores | 4.33 · 0.02 cores |
+| batch TTFR · completion p50 / p90 / last | 400 s · 1,992 / — / — | 318 s · 1,877 / 2,182 / 2,319 s |
+| $ / 1k footage-hours | $8.60 | **$8.06** |
+| evidence grade | SIZING | SIZING (single rep) |
+
+Reading: fewer tasks with an explicit cap did the identical work 6% faster on ~2.5 fewer cores — CPU per frame down 16%. Both cells admitted the whole corpus (512 and 192 slots vs 168 videos), so this is not yet a width-limited cell; memory sat at the 58 GB limit in both. Next cells to isolate width: `threads=16` (96 slots) or `RR_INFLIGHT_PER_TASK=4`.
 
 ## 4. Findings
 
