@@ -53,6 +53,13 @@ def native_resources(sampler_path) -> Optional[Dict[str, Any]]:
     }
 
 
+# How far past the window's end the first later sample may lie and still be
+# used as the end anchor. Pipeline teardown between the last completion and a
+# late sample burns near-zero CPU, so a few minutes is safe; beyond that the
+# gap is a different question and the inside sample is used, flagged.
+END_ANCHOR_TOLERANCE_S = 300.0
+
+
 def window(sampler_path, t0_ns: Optional[int], t1_ns: Optional[int],
            mono_offset_ns: Optional[int] = None) -> Optional[Dict[str, Any]]:
     """Re-slice a sampler stream to EXACTLY the throughput window.
@@ -76,20 +83,52 @@ def window(sampler_path, t0_ns: Optional[int], t1_ns: Optional[int],
     t1 = (t1_ns + mono_offset_ns) / 1e9
     before = [l for l in lines if l["ts"] <= t0]
     inside = [l for l in lines if t0 < l["ts"] <= t1]
+    after = [l for l in lines if l["ts"] > t1]
     if not inside:
         return None
     a = before[-1] if before else inside[0]
+    # End anchor: the counter's value LEAVING the window -- the first sample
+    # at or after t1 when one exists close by, the mirror of the t0 anchor.
+    # A sampler that died before t1 (a capped SAMPLE_MAX_S on a rep that ran
+    # longer than anyone planned -- the 2026-09-16 b16 cell ran 5 h against
+    # a 2 h cap) otherwise truncates CPU to whatever it happened to see and
+    # understates cost-per-work silently. Whichever anchor is used, and any
+    # uncovered stretch, is DISCLOSED in `coverage`.
     b = inside[-1]
+    end_anchor = "last sample inside window"
+    if after and (after[0]["ts"] - t1) <= END_ANCHOR_TOLERANCE_S:
+        b = after[0]
+        end_anchor = f"first sample after window (+{after[0]['ts'] - t1:.1f} s)"
     span = b["ts"] - a["ts"]
     if span <= 0:
         return None
     rss = [l["rss_mb_sum"] for l in inside]
     thr = [l["n_threads"] for l in inside]
     cpu_s = b["cpu_total_s"] - a["cpu_total_s"]
+    max_gap = max((y["ts"] - x["ts"] for x, y in zip(inside, inside[1:])),
+                  default=0.0)
+    uncovered_tail = max(0.0, t1 - inside[-1]["ts"])
+    coverage = {
+        "window_s": round(t1 - t0, 2),
+        "start_anchor": ("last sample at/before window start" if before
+                         else "first sample inside window"),
+        "end_anchor": end_anchor,
+        "uncovered_tail_s": round(uncovered_tail, 1),
+        "max_sample_gap_s": round(max_gap, 1),
+        "note": "cpu_seconds is exact between the two anchors (cumulative "
+                "cgroup counter); rss/thread stats cover sampled instants only",
+    }
+    if uncovered_tail > 60 or max_gap > 60:
+        coverage["WARNING"] = ("sampler did not cover the whole window: "
+                               "rss/thread stats are partial"
+                               + ("" if b is not inside[-1] else
+                                  "; cpu_seconds is TRUNCATED at the last "
+                                  "inside sample"))
     return {
         "samples_in_window": len(inside), "span_s": round(span, 2),
         "cpu_seconds": round(cpu_s, 2),
         "effective_cores": round(cpu_s / span, 3),
+        "coverage": coverage,
         "rss_mb": {"peak": max(rss), "median": st.median(rss),
                    "start": rss[0], "end": rss[-1],
                    "growth": round(rss[-1] - rss[0], 1)},
