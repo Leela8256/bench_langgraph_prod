@@ -9,6 +9,7 @@ already been bitten by /meta reporting a concurrency the code never used.
 """
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -54,6 +55,7 @@ def main():
     # COMPONENTS instead -- stable across editor saves, sensitive to any real
     # change in nodes, providers, config or lane wiring.
     pipe_sha = pipe_raw_sha = None
+    pipe_doc = None
     for cand in (run / "pipeline.pipe", *sorted(run.glob("*/rep1/pipeline.pipe"))):
         if not cand.exists():
             continue
@@ -73,7 +75,42 @@ def main():
         canon = json.dumps(_strip(doc.get("components")), sort_keys=True)
         pipe_sha = hashlib.sha256(canon.encode()).hexdigest()
         pipe_raw_sha = hashlib.sha256(cand.read_bytes()).hexdigest()
+        pipe_doc = doc
         break
+
+    # RocketRide-only runs (SKIP_LG=1) have no LangGraph /meta to read the
+    # parser, chunk and embedding configuration from, which used to leave
+    # every engine-only probe with INCOMPLETE provenance for lack of a
+    # comparison arm. Read those three from the pipe that actually ran -- it
+    # is the contract the engine executed, hashed above -- and say so.
+    def _comp(provider):
+        for c in (pipe_doc or {}).get("components") or []:
+            if isinstance(c, dict) and c.get("provider") == provider:
+                return c
+        return None
+    rr_only = not meta
+    parse_c = _comp("parse")
+    chunk_c = _comp("preprocessor_langchain")
+    emb_c = _comp("embedding_transformer")
+    parser = env.get("lg_extractor")
+    parser_cfg_hash = wv.get("extractor")
+    chunk_cfg = wv.get("split")
+    emb_model = (wv.get("embedding") or {}).get("model_id")
+    if rr_only and parse_c is not None:
+        import hashlib
+        parser = "rocketride parse node (engine-embedded Apache Tika 3.2.3)"
+        parser_cfg_hash = hashlib.sha256(json.dumps(
+            {"provider": "parse", "config": parse_c.get("config", {})},
+            sort_keys=True).encode()).hexdigest()
+    if rr_only and chunk_c is not None:
+        chunk_cfg = {"provider": "preprocessor_langchain",
+                     "config": chunk_c.get("config", {}),
+                     "source": "pipeline.pipe (RocketRide-only run)"}
+    if rr_only and emb_c is not None:
+        prof = (emb_c.get("config") or {}).get("profile")
+        known = {"miniLM": "sentence-transformers/multi-qa-MiniLM-L6-cos-v1"}
+        emb_model = (f"{known.get(prof, 'unknown')} (engine profile "
+                     f"{prof!r}, from pipeline.pipe)")
 
     rec = {
         "run_id": run.name,
@@ -106,10 +143,13 @@ def main():
         "pipe_components_sha256": pipe_sha,
         "pipe_file_sha256": pipe_raw_sha,
         "corpus_n_docs": int(env.get("n_docs") or 0) or None,
-        "parser": env.get("lg_extractor"),
-        "parser_config_hash": wv.get("extractor"),
-        "chunk_config": wv.get("split"),
-        "embedding_model": (wv.get("embedding") or {}).get("model_id"),
+        "parser": parser,
+        "parser_config_hash": parser_cfg_hash,
+        "chunk_config": chunk_cfg,
+        "embedding_model": emb_model,
+        "provenance_source_for_parser_chunk_embedding":
+            ("pipeline.pipe (no LangGraph arm in this run)" if rr_only
+             else "langgraph /meta"),
         "offered_concurrency": env.get("mode"),
         "configured_concurrency": {
             "langgraph": "default executor min(32, cpu_count+4); /meta's "
@@ -133,7 +173,14 @@ def main():
         "langgraph_server_executor_policy": "default min(32, cpu_count+4); "
                                             "/meta's executor_workers is INERT",
         "rocketride_driver_mode": env.get("rr_mode"),
-        "rocketride_submission": "one whole-corpus SDK batch",
+        "rocketride_submission": (
+            "one whole-corpus SDK batch" if (env.get("rr_mode") or "") == "blast"
+            else f"consecutive SDK batches of {env['rr_mode'][1:]} documents on one connection"
+            if re.fullmatch(r"b\d+", env.get("rr_mode") or "")
+            else f"closed-loop, one SDK call per document ({env.get('rr_mode')})"),
+        "rocketride_batch_size": (int(env["rr_mode"][1:])
+                                  if re.fullmatch(r"b\d+", env.get("rr_mode") or "")
+                                  else None),
         "rocketride_threads_requested": int(env.get("rr_threads"))
             if (env.get("rr_threads") or "").isdigit() else None,
         "rocketride_threads_observed": None,   # engine pool is not observable

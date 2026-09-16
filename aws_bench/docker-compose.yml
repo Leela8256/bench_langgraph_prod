@@ -72,6 +72,8 @@ services:
     build:
       context: ./arms/rocketride
       dockerfile: Dockerfile
+      args:
+        RR_LENSORT_PATCH: "${RR_LENSORT_PATCH:-0}"
     image: bench-rocketride:latest
     platform: linux/amd64
     container_name: bench-rocketride

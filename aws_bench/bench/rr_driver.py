@@ -10,7 +10,11 @@ finiteness is folded into vector_dim exactly as gate50/rr_native_gate.py does:
 a non-finite vector can never reach a dim of 384.
 
 Modes: seq (closed-loop, true service latency); blast (ONE batched
-send_files -- the engine holds the backlog and schedules it); c<N>.
+send_files -- the engine holds the backlog and schedules it); c<N>
+(closed-loop, N single-file send_files in flight); b<B> (the corpus is
+submitted as CONSECUTIVE send_files batches of B documents on ONE connection,
+batch k+1 submitted when batch k returns -- in-flight work bounded by B and
+by the engine's own per-connection admission cap).
 
   python3 rr_smoke_driver.py <corpus_dir> <out_dir> <n_docs>
 """
@@ -267,14 +271,23 @@ async def main():
             raise SystemExit(f"WARMUP FAILED: {why}")
         print("[rr] warmup ok (1 fixture doc)", flush=True)
 
+    batch_size = None
     if mode == "seq":
         offered = 1
     elif mode == "blast":
         offered = len(corpus)
     elif mode.startswith("c") and mode[1:].isdigit():
         offered = int(mode[1:])
+    elif mode.startswith("b") and mode[1:].isdigit() and int(mode[1:]) > 0:
+        # b<B>: consecutive send_files() batches of B documents on ONE
+        # connection, each submitted when the previous one has returned. The
+        # engine never sees more than B documents of this run at once, so
+        # "offered" is the batch size (capped by the corpus). The engine's own
+        # per-connection admission (threads=64 by default) is the other bound.
+        batch_size = int(mode[1:])
+        offered = min(batch_size, len(corpus))
     else:
-        raise SystemExit(f"bad mode {mode!r}: expected seq | blast | c<N>")
+        raise SystemExit(f"bad mode {mode!r}: expected seq | blast | c<N> | b<B>")
 
     # Sampler ts is wall-clock epoch, per-doc ts is monotonic; this offset is
     # what lets m7_resources.window() slice the sampler to EXACTLY the
@@ -290,7 +303,8 @@ async def main():
     # Blast issues ONE send_files() on ONE client, so a pool is pointless --
     # and building one triggered 189 refused connections (the engine accepts
     # ~11 concurrent). Only the per-doc modes need multiple sockets.
-    pool_size = 1 if mode == "blast" else min(offered, POOL_MAX)
+    # b<B> likewise: one connection carries every batch, by definition.
+    pool_size = 1 if (mode == "blast" or batch_size) else min(offered, POOL_MAX)
     pool = [client]
 
     async def add_client():
@@ -367,6 +381,9 @@ async def main():
                 print(f"[rr] {done[0]}/{len(corpus)}", flush=True)
             return rec
 
+    client_observed = None      # how many per-file completions were CLIENT-observed
+    n_batches = None
+    batch_spans = []
     t0 = time.perf_counter_ns()
     if mode == "blast":
         # ONE call carrying the whole backlog. The engine holds the batch and
@@ -402,10 +419,65 @@ async def main():
                       flush=True)
         records = records_from_batch(corpus, batch_result, t0, mono_offset_ns,
                                      usable)
+        client_observed = len(usable)
         returned = len(batch_result) if isinstance(batch_result, list) else 1
         matched = sum(1 for r in records if r.get("reason") != "no_response_for_file")
         print(f"[rr] batch returned {returned} items for {len(corpus)} files; "
               f"{matched} attributed by filepath", flush=True)
+    elif batch_size:
+        # b<B>: the corpus in CONSECUTIVE batches of B, each ONE send_files()
+        # call on ONE connection, submitted back-to-back. The measured span
+        # runs from the first batch's submit to the last batch's return, so
+        # every inter-batch turnaround is inside it -- that turnaround is a
+        # real cost of batching, not overhead to be excluded. Each batch is
+        # attributed exactly like blast (by filepath, client-observed upload
+        # events when they signal processing, derived otherwise); a batch that
+        # times out or drops the connection marks all of ITS files, never the
+        # rest of the run.
+        records, usable_total = [], 0
+        n_batches = (len(corpus) + batch_size - 1) // batch_size
+        for bi in range(n_batches):
+            chunk = corpus[bi * batch_size:(bi + 1) * batch_size]
+            names = {p.name for p in chunk}
+            payload = [(str(p), {"doc_id": p.stem}) for p in chunk]
+            tb = time.perf_counter_ns()
+            failed_why = None
+            try:
+                res = await asyncio.wait_for(client.send_files(payload, token),
+                                             timeout=BATCH_TIMEOUT_S)
+            except asyncio.TimeoutError:
+                res, failed_why = [], "timeout"
+            except Exception as exc:
+                res = []
+                failed_why = f"transport_error: {type(exc).__name__}: {exc}"[:250]
+            tb_end = time.perf_counter_ns()
+            bspan_ns = tb_end - tb
+            ev = {k: v for k, v in event_times.items() if k in names}
+            if ev and bspan_ns and (max(ev.values()) - tb) / bspan_ns < 0.5:
+                ev = {}          # upload-only events: fall back to derived
+            recs = records_from_batch(chunk, res, tb, mono_offset_ns, ev)
+            for r in recs:
+                r["batch_index"] = bi
+                r["batch_size"] = len(chunk)
+                if failed_why and r.get("reason") == "no_response_for_file":
+                    r["reason"] = failed_why.split(":")[0]
+                    r["error"] = failed_why
+                    r["completion_ns"] = tb_end
+            records.extend(recs)
+            usable_total += len(ev)
+            batch_spans.append(bspan_ns / 1e9)
+            if (bi + 1) % 10 == 0 or bi + 1 == n_batches:
+                ok_so_far = sum(1 for r in records if r.get("ok"))
+                print(f"[rr] batch {bi + 1}/{n_batches}: "
+                      f"{min((bi + 1) * batch_size, len(corpus))}/{len(corpus)} docs, "
+                      f"ok={ok_so_far}, last batch {bspan_ns / 1e9:.1f}s"
+                      + (f" [{failed_why}]" if failed_why else ""), flush=True)
+        span = (time.perf_counter_ns() - t0) / 1e9
+        client_observed = usable_total
+        bs = sorted(batch_spans)
+        print(f"[rr] {n_batches} batches of {batch_size}; client-observed "
+              f"completions for {usable_total}/{len(corpus)} files; batch span "
+              f"p50={bs[len(bs) // 2]:.1f}s max={bs[-1]:.1f}s", flush=True)
     else:
         records = await asyncio.gather(*[one(i, p) for i, p in enumerate(corpus)])
         span = (time.perf_counter_ns() - t0) / 1e9
@@ -424,7 +496,20 @@ async def main():
             "warm_docs": warm_docs,
             "warm_disjoint_from_measured": warm_disjoint,
             "event_actions_seen": dict(event_actions),
-            "client_observed_completions": len(usable) if mode == "blast" else None,
+            "client_observed_completions": client_observed,
+            "submission": ("one whole-corpus send_files batch" if mode == "blast"
+                           else f"consecutive send_files batches of {batch_size} "
+                                f"documents on one connection" if batch_size
+                           else "one send_files per document, closed-loop"),
+            "batch_size": batch_size,
+            "n_batches": n_batches,
+            "batch_span_s": ({"min": round(min(batch_spans), 3),
+                              "p50": round(sorted(batch_spans)[len(batch_spans) // 2], 3),
+                              "max": round(max(batch_spans), 3)}
+                             if batch_spans else None),
+            "latency_note": ("per-document latency is position within its "
+                             "batch of %d (batch submit -> client-observed "
+                             "completion)" % batch_size) if batch_size else None,
             "warm_s": round(warm_s, 3) if warm_s is not None else None,
             "configured_concurrency_note":
                 "threads_requested is what was ASKED FOR; the engine pool actually "

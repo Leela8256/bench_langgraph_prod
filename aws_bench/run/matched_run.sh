@@ -6,7 +6,7 @@
 #   same corpus, same N, same document order   (govdocs, sorted[:N])
 #   same envelope                              (ARM_CPUS / ARM_MEM, both arms)
 #   same rep count                             (REPS)
-#   same mode                                  (blast, or c<N> closed-loop)
+#   same mode                                  (blast, c<N> closed-loop, or b<B> batches)
 #   same warm-start policy                     (WARM docs, excluded)
 #   arms run ONE AT A TIME                     (no contention)
 #
@@ -15,11 +15,12 @@
 #
 #   bash run/matched_run.sh                 # blast, defaults below
 #   MODE=c8 REPS=3 bash run/matched_run.sh  # closed-loop at 8 in flight
+#   MODE=b32 SKIP_LG=1 bash run/matched_run.sh  # RocketRide: send_files batches of 32
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")/.." && pwd)"; cd "$HERE"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
-RUN="$HERE/results/${STAMP}_${MODE:-blast}"
+RUN="$HERE/results/${RUN_TAG:-${STAMP}_${MODE:-blast}}"
 N="${N:-200}"; REPS="${REPS:-3}"; WARM="${WARM:-25}"; MODE="${MODE:-blast}"
 # native_saturation: each arm runs its OWN native ingestion path, because they
 # are not the same interface. LangGraph is an HTTP service kept supplied by a
@@ -116,7 +117,7 @@ measured_documents=$N
 langgraph_mode=$LG_MODE   (bounded closed-loop HTTP window)
 langgraph_client_window=$LG_CLIENT_WINDOW
 langgraph_server_executor=default (~min(32, cpu_count+4) workers, INERT config)
-rocketride_mode=$RR_MODE  (one whole-corpus SDK batch)
+rocketride_mode=$RR_MODE  (blast = one whole-corpus SDK batch; b<B> = consecutive SDK batches of B on one connection; c<N>/seq = closed-loop)
 rocketride_threads_requested=${RR_THREADS:-unset (engine default)}
 rocketride_arm_cpus=$ARM_CPUS
 omp_num_threads=1 (pinned on BOTH arms)
@@ -124,10 +125,13 @@ NOTE: threads requested != threads activated != effective cores.
 --------------------------------------------------------------------
 BANNER
 say "building both arms + bench client"
+BUILD_ARMS="rocketride"
+[ "${SKIP_LG:-0}" != "1" ] && BUILD_ARMS="langgraph rocketride"
 docker compose build --build-arg RR_DUP_PATCH="$RR_DUP_PATCH" \
-  langgraph rocketride 2>&1 | tail -6
+  --build-arg RR_LENSORT_PATCH="${RR_LENSORT_PATCH:-0}" \
+  $BUILD_ARMS 2>&1 | tail -6
 docker compose --profile client build bench 2>&1 | tail -3
-for i in langgraph rocketride; do
+for i in $BUILD_ARMS; do
   docker image inspect "bench-$i:latest" --format "$i {{.Id}} {{.Architecture}}" \
     >> "$RUN/image_ids.txt"
 done
@@ -221,7 +225,9 @@ python3 bench/report.py "$RUN" | tee "$RUN/report.txt"
 RC=${PIPESTATUS[0]}
 set -e
 
-S3_DEST="${BENCH_S3:-s3://rocketride-benchmark-data/leela/bench}/$STAMP/"
+# The S3 prefix carries the run tag when one was given (a dated, named prefix
+# is findable; a bare stamp is not), else the stamp as before.
+S3_DEST="${BENCH_S3:-s3://rocketride-benchmark-data/leela/bench}/${RUN_TAG:-$STAMP}/"
 if command -v aws >/dev/null 2>&1 && aws sts get-caller-identity >/dev/null 2>&1; then
   aws s3 cp "$RUN/" "$S3_DEST" --recursive --only-show-errors \
     && say "exfil OK -> $S3_DEST" || say "WARNING: S3 upload failed"

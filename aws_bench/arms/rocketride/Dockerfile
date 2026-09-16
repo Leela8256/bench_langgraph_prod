@@ -117,6 +117,19 @@ RUN if [ "$RR_DUP_PATCH" = "1" ]; then \
       && echo "BUG_CHUNK_DUPLICATION patch applied to $F"; \
     else echo "BUG_CHUNK_DUPLICATION patch SKIPPED (stock 3.3.1)"; fi
 
+# ---------------------------------------------------------------------------
+# PR #2197 — fix(embedding): batch sentences by length so padding stops wasting
+# compute. _encode_local batched in arrival order while tokenization pads every
+# batch to its longest member. OFF by default; RR_LENSORT_PATCH=1 builds the
+# A/B image. Same patch script as the video arm.
+ARG RR_LENSORT_PATCH=0
+COPY patches/lensort_2197.py /tmp/lensort_2197.py
+RUN if [ "$RR_LENSORT_PATCH" = "1" ]; then \
+      python3 /tmp/lensort_2197.py "$ENGINE_DIR"; \
+    else echo "PR2197 length-sorted batching SKIPPED (arrival-order batching)"; fi
+
+LABEL benchmark.rocketride.lensort_patch_pr2197="${RR_LENSORT_PATCH}"
+
 LABEL benchmark.rocketride.engine_version="3.3.1" \
       benchmark.rocketride.duplication_patch="preventDefault-after-embedding-flush"
 # ---------------------------------------------------------------------------
