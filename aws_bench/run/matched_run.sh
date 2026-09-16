@@ -63,6 +63,11 @@ else
 fi
 export ARM_CPUS BENCH_CPUSET CLIENT_CPUSET CLIENT_ISOLATED
 export BENCH_TIMEOUT_S="${BENCH_TIMEOUT_S:-3600}"
+# In-container sampler lifetime. It used to be a hardcoded 7200 s, which
+# silently truncated CPU/RSS coverage for any rep longer than two hours (the
+# 2026-09-16 b16 cell ran 18,290 s). Default is now a day; the report's
+# `coverage` block discloses any window the sampler did not fully cover.
+export SAMPLE_MAX_S="${SAMPLE_MAX_S:-86400}"
 # Memory is measured, not capped -- see docker-compose.yml. A 10g cap would
 # have OOM-killed RocketRide (peak 10,536 MB) and capping per container gave
 # the two-container LG arm twice RocketRide's ceiling.
@@ -168,11 +173,11 @@ docker run --rm --entrypoint pip bench-langgraph:latest freeze > "$RUN/pip_freez
 for r in $(seq 1 "$REPS"); do
   D="$RUN/lg/rep$r"; mkdir -p "$D"
   say "lg rep$r/$REPS"
-  docker exec -e SAMPLE_MAX_S=7200 -i "$LG" python3 - < bench/cgroup_sampler.py \
+  docker exec -e SAMPLE_MAX_S="${SAMPLE_MAX_S:-86400}" -i "$LG" python3 - < bench/cgroup_sampler.py \
     > "$D/sampler.jsonl" 2>"$D/sampler.err" &
   S1=$!
   if [ "$LG_EXTRACTOR" = tika ]; then
-    docker exec -e SAMPLE_MAX_S=7200 -i bench-tika python3 - < bench/cgroup_sampler.py \
+    docker exec -e SAMPLE_MAX_S="${SAMPLE_MAX_S:-86400}" -i bench-tika python3 - < bench/cgroup_sampler.py \
       > "$D/sampler_tika.jsonl" 2>/dev/null &
     S2=$!
   else S2=""; fi
@@ -199,7 +204,7 @@ docker logs "$RR" > "$RUN/engine_boot.log" 2>&1
 for r in $(seq 1 "$REPS"); do
   D="$RUN/rr/rep$r"; mkdir -p "$D"
   say "rr rep$r/$REPS"
-  docker exec -e SAMPLE_MAX_S=7200 -i "$RR" python3 - < bench/cgroup_sampler.py \
+  docker exec -e SAMPLE_MAX_S="${SAMPLE_MAX_S:-86400}" -i "$RR" python3 - < bench/cgroup_sampler.py \
     > "$D/sampler.jsonl" 2>"$D/sampler.err" &
   S3=$!
   sleep 2
