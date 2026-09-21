@@ -111,6 +111,12 @@ inside the service. Read `achieved concurrency`, not the offered number.
 """)
 PY
 
+  # The paired directory is a run record in its own right and must carry its
+  # own provenance, or report.py fails it for a missing file rather than for
+  # anything about the measurement. Derived from the assembled environment:
+  # the LangGraph run's environment.txt and /meta, the RocketRide run's engine
+  # hash, both image ids.
+  python3 run/write_provenance.py "$P" | sed 's/^/  /'
   python3 bench/report.py "$P" > "$P/report.txt" 2>&1
   grep -E '^RUN (PASS|FAIL)|reason:' "$P/report.txt" | head -4
   sed -n '/^cross-arm/,+3p' "$P/report.txt" | head -4
