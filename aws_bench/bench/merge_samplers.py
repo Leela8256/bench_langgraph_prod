@@ -1,12 +1,22 @@
 """Merge supplementary cgroup sampler streams into a rep's sampler.jsonl.
 
-Why: run/matched_run.sh starts its in-container sampler with SAMPLE_MAX_S=7200,
-so a rep that runs longer than two hours (the 2026-09-16 b16 cell ran five)
-loses CPU/RSS coverage for its tail. A supervisor on the box ran the SAME
-sampler (bench/cgroup_sampler.py, same schema, same cgroup counters) without
-the cap; this merges those streams so metrics.m7_resources.window() sees the
-whole window. The runner's original stream is preserved beside the merge, and
-a sidecar records exactly what was merged.
+Why: run/matched_run.sh used to start its in-container sampler with
+SAMPLE_MAX_S=7200, so a rep that ran longer than two hours (the 2026-09-16
+b16/b32/b64 cells ran 3.4-5.1 h) lost CPU/RSS coverage for its tail. A
+supervisor on the box ran the SAME sampler (bench/cgroup_sampler.py, same
+cgroup counters, same container) without the cap; this merges those streams so
+metrics.m7_resources.window() sees the whole window.
+
+The runner's stream is AUTHORITATIVE wherever it has samples: two samplers
+reading one cumulative counter a fraction of a millisecond apart produce
+values that interleave out of order by a few hundredths of a CPU-second, and
+mixing them would make the merged series non-monotonic for no gain. A
+supplementary sample is therefore used only where the runner has none (the
+uncovered tail, or a gap). What survives is one continuous series.
+
+A genuine counter RESET -- a supplementary stream from a different container
+start, whose counter begins near zero -- is a different matter and must never
+be merged silently, so a drop larger than RESET_DROP_S aborts.
 
   python3 bench/merge_samplers.py <rep_dir> <extra.jsonl> [<extra.jsonl> ...]
 """
@@ -14,7 +24,15 @@ a sidecar records exactly what was merged.
 import json
 import shutil
 import sys
+from bisect import bisect_left
 from pathlib import Path
+
+# Half a sample interval (the sampler ticks at 0.5 s): a supplementary sample
+# this close to a runner sample is the same instant measured twice.
+GRID_TOLERANCE_S = 0.25
+# A cumulative cgroup counter never falls. A drop beyond this is a container
+# restart, not sampler jitter -- and merging across it would be nonsense.
+RESET_DROP_S = 60.0
 
 
 def load(p: Path):
@@ -29,6 +47,7 @@ def load(p: Path):
             continue
         if "ts" in r and "cpu_total_s" in r:
             out.append(r)
+    out.sort(key=lambda r: r["ts"])
     return out
 
 
@@ -40,27 +59,58 @@ def main():
     if not keep.exists():
         shutil.copy2(target, keep)          # original, untouched, kept forever
     base = load(keep)
-    merged = {r["ts"]: r for r in base}
+    if not base:
+        raise SystemExit(f"{keep}: no usable samples")
+
+    rows = list(base)
     counts = {"runner": len(base)}
+    added_detail = {}
     for e in extras:
-        rows = load(e)
-        counts[e.name] = len(rows)
-        for r in rows:
-            merged.setdefault(r["ts"], r)
-    rows = [merged[k] for k in sorted(merged)]
-    # A cumulative counter must never go backwards across the merge; if it
-    # does, the streams are from different containers and must not be mixed.
+        cand = load(e)
+        counts[e.name] = len(cand)
+        ts = [r["ts"] for r in rows]
+        added = []
+        for r in cand:
+            i = bisect_left(ts, r["ts"])
+            near = False
+            for j in (i - 1, i):
+                if 0 <= j < len(ts) and abs(ts[j] - r["ts"]) <= GRID_TOLERANCE_S:
+                    near = True
+                    break
+            if not near:
+                added.append(r)
+        rows = sorted(rows + added, key=lambda r: r["ts"])
+        added_detail[e.name] = len(added)
+
+    # One continuous, non-decreasing series, or an explained abort.
     for x, y in zip(rows, rows[1:]):
-        assert y["cpu_total_s"] >= x["cpu_total_s"] - 1e-6, (
-            f"cpu_total_s not monotonic at ts={y['ts']}: streams from different containers?")
+        drop = x["cpu_total_s"] - y["cpu_total_s"]
+        if drop > RESET_DROP_S:
+            raise SystemExit(
+                f"ABORT: cpu_total_s falls {drop:.1f} s at ts={y['ts']} "
+                f"({x['cpu_total_s']:.1f} -> {y['cpu_total_s']:.1f}). That is a "
+                f"container restart, not sampler jitter; these streams are from "
+                f"different engine runs and must not be merged.")
+    jitter = [round(x["cpu_total_s"] - y["cpu_total_s"], 3)
+              for x, y in zip(rows, rows[1:]) if y["cpu_total_s"] < x["cpu_total_s"]]
+
     with open(target, "w") as fh:
         for r in rows:
             fh.write(json.dumps(r) + "\n")
-    side = {"merged_from": counts, "n_merged": len(rows),
-            "first_ts": rows[0]["ts"], "last_ts": rows[-1]["ts"],
-            "note": "runner stream capped at SAMPLE_MAX_S=7200; supplementary "
-                    "stream(s) from the same sampler code on the same container "
-                    "(box supervisor, uncapped). Original kept as sampler.runner.jsonl."}
+    side = {
+        "merged_from": counts,
+        "samples_added_per_stream": added_detail,
+        "n_merged": len(rows),
+        "first_ts": rows[0]["ts"], "last_ts": rows[-1]["ts"],
+        "residual_negative_steps": len(jitter),
+        "max_negative_step_cpu_s": max(jitter) if jitter else 0.0,
+        "policy": (f"runner stream authoritative; a supplementary sample is used only "
+                   f"where no runner sample lies within {GRID_TOLERANCE_S}s. Abort if "
+                   f"the counter drops more than {RESET_DROP_S}s (container restart)."),
+        "note": "runner stream was capped at SAMPLE_MAX_S=7200 (fixed since); "
+                "supplementary stream(s) are the same sampler on the same container "
+                "from the box supervisor. Original kept as sampler.runner.jsonl.",
+    }
     (rep / "sampler_merge.json").write_text(json.dumps(side, indent=1))
     print(json.dumps(side, indent=1))
 
