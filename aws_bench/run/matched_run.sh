@@ -16,6 +16,7 @@
 #   bash run/matched_run.sh                 # blast, defaults below
 #   MODE=c8 REPS=3 bash run/matched_run.sh  # closed-loop at 8 in flight
 #   MODE=b32 SKIP_LG=1 bash run/matched_run.sh  # RocketRide: send_files batches of 32
+#   MODE=b32 SKIP_RR=1 bash run/matched_run.sh  # LangGraph: waves of 32, barrier between
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")/.." && pwd)"; cd "$HERE"
@@ -130,8 +131,10 @@ NOTE: threads requested != threads activated != effective cores.
 --------------------------------------------------------------------
 BANNER
 say "building both arms + bench client"
-BUILD_ARMS="rocketride"
-[ "${SKIP_LG:-0}" != "1" ] && BUILD_ARMS="langgraph rocketride"
+BUILD_ARMS=""
+[ "${SKIP_LG:-0}" != "1" ] && BUILD_ARMS="langgraph"
+[ "${SKIP_RR:-0}" != "1" ] && BUILD_ARMS="$BUILD_ARMS rocketride"
+[ -n "$BUILD_ARMS" ] || { echo "FATAL: SKIP_LG=1 and SKIP_RR=1 leaves no arm to run"; exit 1; }
 docker compose build --build-arg RR_DUP_PATCH="$RR_DUP_PATCH" \
   --build-arg RR_LENSORT_PATCH="${RR_LENSORT_PATCH:-0}" \
   $BUILD_ARMS 2>&1 | tail -6
@@ -195,6 +198,10 @@ else
 fi
 
 # ------------------------------------------------------------------ RR arm
+# SKIP_RR=1 runs the LangGraph arm alone -- the mirror of SKIP_LG, for adding
+# one arm to a campaign whose other arm has already been measured. The run is
+# then a single-arm PROBE and the report's cross-arm section will say so.
+if [ "${SKIP_RR:-0}" != "1" ]; then
 say "=== RocketRide — $REPS x $N docs, mode=$RR_MODE ==="
 docker compose up -d rocketride
 wait_healthy "$RR" rocketride || { echo FATAL; exit 1; }
@@ -220,6 +227,9 @@ for r in $(seq 1 "$REPS"); do
 done
 docker logs --tail 300 "$RR" > "$RUN/engine_run.log" 2>&1 || true
 docker compose stop rocketride 2>/dev/null || true
+else
+  say "SKIP_RR=1 — RocketRide arm skipped (LangGraph-only probe run)"
+fi
 
 # --------------------------------------------------------------- provenance
 python3 run/write_provenance.py "$RUN"

@@ -7,6 +7,21 @@ identity_ok, sha_header_ok, vectors_finite.
 Sequential on purpose: closed-loop gives TRUE SERVICE LATENCY (metrics/README
 M2). A blast run would give batch-position latency and must be labeled so.
 
+Modes: seq | blast | c<N> | b<B>.
+
+b<B> is the BATCHED-SUBMISSION analogue of the RocketRide driver's b<B>: the
+corpus is processed in consecutive waves of B documents, and wave k+1 is not
+submitted until every document of wave k has returned. The two arms do not
+share a wire protocol here and must never be described as if they did --
+RocketRide sends ONE `send_files` call carrying B files and the engine
+schedules them internally; LangGraph has no batch endpoint, so a wave is B
+concurrent HTTP requests released together and joined at a barrier. What the
+two share, and what makes the cells comparable, is the SHAPE of the offered
+load: at most B documents in flight, and a wave boundary that waits for the
+slowest member. Per-document time is measured from wave release to that
+document's own completion on both arms, so it carries intra-wave queueing on
+both and is labelled batch-position latency on both.
+
   python3 lg_smoke_driver.py <corpus_dir> <out_dir> [n_docs]
 """
 
@@ -161,14 +176,18 @@ def main():
         json.dumps({"docs": [p.name for p in corpus], "n": len(corpus)})
     )
 
+    batch_size = None
     if mode == "seq":
         offered = 1
     elif mode == "blast":
         offered = len(corpus)
     elif mode.startswith("c") and mode[1:].isdigit():
         offered = int(mode[1:])
+    elif mode.startswith("b") and mode[1:].isdigit() and int(mode[1:]) > 0:
+        batch_size = int(mode[1:])
+        offered = min(batch_size, len(corpus))
     else:
-        raise SystemExit(f"bad mode {mode!r}: expected seq | blast | c<N>")
+        raise SystemExit(f"bad mode {mode!r}: expected seq | blast | c<N> | b<B>")
 
     # Sampler timestamps are wall-clock epoch; per-doc timestamps are
     # monotonic. This offset is what lets m7_resources.window() slice the
@@ -186,7 +205,35 @@ def main():
 
     t0 = time.perf_counter_ns()
     records = []
-    if offered == 1:
+    n_batches = None
+    batch_spans = []
+    if batch_size:
+        # Consecutive waves of B, joined at a barrier. A fresh pool per wave IS
+        # the barrier: its context manager will not exit until every request of
+        # the wave has returned, so wave k+1 cannot start early. Each request
+        # carries its own measured submit/completion, and a wave that fails
+        # wholesale marks only ITS documents.
+        n_batches = (len(corpus) + batch_size - 1) // batch_size
+        for bi in range(n_batches):
+            chunk = corpus[bi * batch_size:(bi + 1) * batch_size]
+            tb = time.perf_counter_ns()
+            with ThreadPoolExecutor(max_workers=len(chunk)) as pool:
+                recs = list(pool.map(one, chunk))
+            bspan = (time.perf_counter_ns() - tb) / 1e9
+            for r in recs:
+                r["batch_index"] = bi
+                r["batch_size"] = len(chunk)
+            records.extend(recs)
+            batch_spans.append(bspan)
+            if (bi + 1) % 10 == 0 or bi + 1 == n_batches:
+                ok_so_far = sum(1 for r in records if r.get("ok"))
+                print(f"  batch {bi + 1}/{n_batches}: "
+                      f"{min((bi + 1) * batch_size, len(corpus))}/{len(corpus)} docs, "
+                      f"ok={ok_so_far}, last batch {bspan:.1f}s", flush=True)
+        bs = sorted(batch_spans)
+        print(f"  {n_batches} batches of {batch_size}; batch span "
+              f"p50={bs[len(bs) // 2]:.1f}s max={bs[-1]:.1f}s", flush=True)
+    elif offered == 1:
         for i, pdf in enumerate(corpus, 1):
             rec = one(pdf)
             records.append(rec)
@@ -221,6 +268,22 @@ def main():
             "warm_disjoint_from_measured": warm_disjoint,
             "warm_s": round(warm_s, 3) if warm_s is not None else None,
             "offered_concurrency": offered,
+            "submission": (
+                f"consecutive waves of {batch_size} concurrent HTTP requests, "
+                f"joined at a barrier (LangGraph has no batch endpoint; this is "
+                f"the offered-load analogue of RocketRide's b{batch_size}, NOT "
+                f"the same wire protocol)" if batch_size
+                else "one HTTP request per document"),
+            "batch_size": batch_size,
+            "n_batches": n_batches,
+            "batch_span_s": ({"min": round(min(batch_spans), 3),
+                              "p50": round(sorted(batch_spans)[len(batch_spans) // 2], 3),
+                              "max": round(max(batch_spans), 3)}
+                             if batch_spans else None),
+            "latency_basis": ("wave release -> this document's own completion "
+                              "(measured per request; includes intra-wave queueing)"
+                              if batch_size else
+                              "per-request round-trip (measured)"),
             # What the service was TOLD vs what it actually runs: /meta reports
             # EXECUTOR_WORKERS, but nodes.py uses LangGraph's default executor,
             # width min(32, os.cpu_count()+4) -- and cpu_count() sees host
