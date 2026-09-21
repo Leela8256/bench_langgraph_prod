@@ -46,6 +46,13 @@ EMBED_DIM = 384
 # (one socket per in-flight doc), so the engine's scheduler is the only
 # limiter. Set RR_POOL_MAX to reimpose one.
 POOL_MAX = int(os.environ.get("RR_POOL_MAX", "0")) or 10 ** 9
+# Per-node timing. Unset/empty = off, and off must stay the default: the
+# control for a traced run is this same driver with RR_TRACE unset.
+# Accepts the engine's literal level strings only.
+TRACE_LEVEL = (os.environ.get("RR_TRACE") or "").strip().lower() or None
+if TRACE_LEVEL and TRACE_LEVEL not in ("metadata", "summary", "full"):
+    raise SystemExit(f"bad RR_TRACE={TRACE_LEVEL!r}: "
+                     f"expected metadata | summary | full (or unset)")
 
 
 def documents_from(result):
@@ -158,6 +165,80 @@ def records_from_batch(corpus, out, t0_ns, mono_offset_ns, event_times=None):
     return recs
 
 
+def summarize_flow(flow_raw, t0_ns, span_s):
+    """Per-node wall time from paired apaevt_flow enter/leave arrivals.
+
+    The engine names the boundaries but stamps no clock, so these are CLIENT
+    arrival times. Websocket delivery latency is common-mode across one socket
+    and cancels in a leave-minus-enter difference; what it cannot cancel is
+    jitter, so treat small differences between nodes as noise and read the
+    shape, not the third digit.
+
+    Pairing is by (pipe id, component) with a stack, which the observability
+    doc requires -- components can repeat within a pipe and stack position is
+    not identity. Durations are therefore INCLUSIVE of anything nested inside;
+    `nested` reports whether that distinction bites on this pipeline (a linear
+    chain should never nest, and if it does the totals are not additive).
+
+    Events that arrive before the measured span begins (warm-up) are dropped,
+    so this covers the same window as the throughput number.
+    """
+    opens: dict = {}
+    intervals: dict = {}
+    unmatched_leave = 0
+    depth_by_pipe: dict = {}
+    max_depth = 0
+    for ts, pipe, op, comp in flow_raw:
+        if op == "enter":
+            d = depth_by_pipe.get(pipe, 0) + 1
+            depth_by_pipe[pipe] = d
+            max_depth = max(max_depth, d)
+            opens.setdefault((pipe, comp), []).append(ts)
+        elif op == "leave":
+            depth_by_pipe[pipe] = max(0, depth_by_pipe.get(pipe, 0) - 1)
+            stack = opens.get((pipe, comp))
+            if not stack:
+                unmatched_leave += 1
+                continue
+            start = stack.pop()
+            if start >= t0_ns:            # warm-up excluded
+                intervals.setdefault(comp or "<unnamed>", []).append(ts - start)
+    unclosed = sum(len(v) for v in opens.values())
+
+    def pct(xs, p):
+        return xs[min(len(xs) - 1, int(p * len(xs)))] / 1e6
+
+    grand = sum(sum(v) for v in intervals.values()) / 1e9
+    nodes = {}
+    for comp, durs in sorted(intervals.items(),
+                             key=lambda kv: -sum(kv[1])):
+        durs.sort()
+        total = sum(durs) / 1e9
+        nodes[comp] = {
+            "calls": len(durs),
+            "total_s": round(total, 3),
+            # Share of summed node time -- THE figure to quote. With C
+            # documents in flight the node totals sum to roughly C x span, so
+            # pct_of_span below can legitimately exceed 100 and must never be
+            # read as "fraction of the run".
+            "pct_of_node_time": round(100 * total / grand, 2) if grand else None,
+            "pct_of_span": round(100 * total / span_s, 2) if span_s else None,
+            "p50_ms": round(pct(durs, 0.50), 3),
+            "p95_ms": round(pct(durs, 0.95), 3),
+            "max_ms": round(durs[-1] / 1e6, 3),
+        }
+    return {
+        "basis": "client arrival timestamps on paired apaevt_flow enter/leave; "
+                 "durations are INCLUSIVE of nested components",
+        "span_s": round(span_s, 3),
+        "nodes": nodes,
+        "nested": max_depth > 1,
+        "max_nesting_depth": max_depth,
+        "unmatched_leave": unmatched_leave,
+        "unclosed_enter": unclosed,
+    }
+
+
 async def main():
     from rocketride import RocketRideClient
 
@@ -200,23 +281,54 @@ async def main():
     event_times: dict = {}
     event_actions: collections.Counter = collections.Counter()
 
+    # PER-NODE TIMING (RR_TRACE).
+    #
+    # The engine emits apaevt_flow with op=begin|enter|leave|end and a
+    # `component` field -- real per-node boundaries -- but ONLY when the task
+    # was started with a pipelineTraceLevel, and NO event carries a timestamp.
+    # So the clock is supplied here: stamp arrival, pair enter/leave, diff.
+    # Delivery latency is common-mode across one socket and cancels in the
+    # diff. Pair by (pipe id, component) as the docs require -- never by stack
+    # position, since components can nest and repeat.
+    #
+    # Off by default: the control run for this measurement is the SAME code
+    # with RR_TRACE unset, so tracing can never silently be part of a baseline.
+    flow_raw: list = []
+    flow_counts: collections.Counter = collections.Counter()
+
     async def on_event(ev):
         try:
-            if ev.get("event") != "apaevt_status_upload":
+            name = ev.get("event")
+            if name == "apaevt_status_upload":
+                b = ev.get("body") or {}
+                act = b.get("action")
+                event_actions[act] += 1
+                if act in ("complete", "error"):
+                    fp = b.get("filepath")
+                    if fp:
+                        event_times.setdefault(Path(fp).name, time.perf_counter_ns())
                 return
-            b = ev.get("body") or {}
-            act = b.get("action")
-            event_actions[act] += 1
-            if act in ("complete", "error"):
-                fp = b.get("filepath")
-                if fp:
-                    event_times.setdefault(Path(fp).name, time.perf_counter_ns())
+            if TRACE_LEVEL and name == "apaevt_flow":
+                # Append-only, O(1), no parsing: this handler is awaited inline
+                # on the SDK receive path and blocking it for ~60 s closes the
+                # websocket. Everything is decoded after the run.
+                b = ev.get("body") or {}
+                flow_raw.append((time.perf_counter_ns(), b.get("id"),
+                                 b.get("op"), b.get("component")))
+                flow_counts[b.get("op")] += 1
         except Exception:
             pass
 
     client = RocketRideClient(uri=URI, auth=APIKEY, on_event=on_event)
     await client.connect()
     use_kwargs = dict(filepath=str(pipe_path), use_existing=True, ttl=7200)
+    if TRACE_LEVEL:
+        # The literal level string -- 'metadata' | 'summary' | 'full'. An
+        # earlier probe in this repo passed "1" (a constant's int value) and
+        # got nothing back, which is why flow traces were written off as
+        # unavailable. 'full' serializes every lane write and would itself
+        # burn the CPU we are trying to attribute; 'summary' is the default.
+        use_kwargs["pipelineTraceLevel"] = TRACE_LEVEL
     if threads:
         use_kwargs["threads"] = threads
     if threads:
@@ -231,11 +343,29 @@ async def main():
           f"threads_requested={threads if threads else 'NONE (engine default)'}",
           flush=True)
 
+    # NOTE: this call is INERT and kept only because every prior run carried
+    # it. `types` wants EVENT_TYPE enum names (FLOW, SUMMARY, TASK, ...), not
+    # wire event names, so the engine logs "Unknown event type
+    # 'apaevt_status_upload' ignored" -- visible in every engine log we have.
+    # It never mattered: upload progress is delivered unconditionally to the
+    # uploading connection, which is why per-doc completion times worked all
+    # along. Left untouched so this change cannot perturb the established
+    # measurement path; the correct subscription is add_monitor() below.
     try:
         await client.set_events(token, ["apaevt_status_upload"])
     except Exception as exc:
         print(f"[rr] set_events unavailable ({type(exc).__name__}); per-doc "
               f"latency will fall back to derived", flush=True)
+
+    if TRACE_LEVEL:
+        try:
+            await client.add_monitor({"token": token}, ["flow", "task"])
+            print(f"[rr] tracing ON: pipelineTraceLevel={TRACE_LEVEL!r}, "
+                  f"subscribed flow+task", flush=True)
+        except Exception as exc:
+            print(f"[rr] FATAL: add_monitor failed ({type(exc).__name__}: {exc})",
+                  flush=True)
+            raise
 
     mode = sys.argv[4] if len(sys.argv) > 4 else "seq"
     warm_docs = int(sys.argv[5]) if len(sys.argv) > 5 else 0
@@ -482,6 +612,26 @@ async def main():
         records = await asyncio.gather(*[one(i, p) for i, p in enumerate(corpus)])
         span = (time.perf_counter_ns() - t0) / 1e9
 
+    # ---- per-node timing, derived after the run (never in the handler) ----
+    node_summary = None
+    if TRACE_LEVEL:
+        node_summary = summarize_flow(flow_raw, t0, span)
+        (out / "flow_events.jsonl").write_text("".join(
+            json.dumps({"ts_ns": ts, "pipe": pid, "op": op, "component": comp}) + "\n"
+            for ts, pid, op, comp in flow_raw))
+        (out / "node_timings.json").write_text(json.dumps(node_summary, indent=1))
+        print(f"[rr] flow events: {dict(flow_counts)}", flush=True)
+        if node_summary.get("nodes"):
+            print(f"[rr] {'node':<26}{'calls':>8}{'total s':>10}{'% node':>8}"
+                  f"{'p50 ms':>10}{'p95 ms':>10}{'max ms':>11}", flush=True)
+            for nm, v in node_summary["nodes"].items():
+                print(f"[rr] {nm:<26}{v['calls']:>8}{v['total_s']:>10.1f}"
+                      f"{v['pct_of_node_time']:>8.1f}{v['p50_ms']:>10.1f}"
+                      f"{v['p95_ms']:>10.1f}{v['max_ms']:>11.1f}", flush=True)
+        else:
+            print("[rr] WARNING: tracing was ON but no enter/leave pairs were "
+                  "captured — flow traces did not arrive", flush=True)
+
     with open(out / "per_doc.jsonl", "w") as fh:
         for rec in records:
             fh.write(json.dumps(rec) + "\n")
@@ -515,6 +665,9 @@ async def main():
                 "threads_requested is what was ASKED FOR; the engine pool actually "
                 "used is not observable from here — never conflate the two.",
             "mono_offset_ns": mono_offset_ns,
+            "trace_level": TRACE_LEVEL,
+            "flow_ops_seen": dict(flow_counts) if TRACE_LEVEL else None,
+            "node_timings": node_summary,
         }) + "\n")
 
     # terminate() before disconnect: disconnecting alone leaves the pipeline and

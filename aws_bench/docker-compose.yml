@@ -117,6 +117,10 @@ services:
       BENCH_WARMUP_DOC: /probe/sample.pdf
       RR_THREADS: "${RR_THREADS:-}"
       RR_POOL_MAX: "${RR_POOL_MAX:-0}"
+      # Per-node timing via the engine's own apaevt_flow traces. Empty = off,
+      # which is what every throughput run must use: the control for a traced
+      # run is the same driver with this unset.
+      RR_TRACE: "${RR_TRACE:-}"
     volumes:
       - "${CORPUS}:/corpus:ro"
       - ./results:/results
