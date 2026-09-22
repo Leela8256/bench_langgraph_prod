@@ -8,6 +8,12 @@ Same record schema and response-unwrapping as the PDF driver; differences:
   - this is a SIZING run, not a gated benchmark: no envelope, single rep,
     the R5 whisper nondeterminism finding stands and is irrelevant here.
 
+RR_TRACE=metadata|summary|full turns on per-node timing from the engine's own
+apaevt_flow events (off by default — the control for a traced run is this same
+driver with RR_TRACE unset). Output: flow_events.jsonl + node_timings.json,
+and trace_level/flow_ops_seen/node_timings in shot_meta. See flow_selftime.py
+for why the numbers are EXCLUSIVE self time and not leave-minus-enter.
+
   python3 bench_video.py <corpus_dir> <out_dir> <n_docs> [mode] [warm_docs]
 """
 
@@ -39,6 +45,16 @@ EMBED_DIM = 384
 POOL_MAX = int(os.environ.get("RR_POOL_MAX", "0")) or 10 ** 9
 ARM = "rocketride-docker-3.3.1-video"
 VIDEO_DURS: dict = {}
+# Per-node timing (ported from aws_bench/bench/rr_driver.py, commit 7f52a17).
+# Unset/empty = off, and off must stay the default: the control for a traced
+# run is this same driver with RR_TRACE unset, so tracing can never silently
+# become part of a baseline. Accepts the engine's literal level strings only —
+# an earlier probe passed "1" (a constant's int value) and got nothing back,
+# which is why flow traces were written off as unavailable for a year.
+TRACE_LEVEL = (os.environ.get("RR_TRACE") or "").strip().lower() or None
+if TRACE_LEVEL and TRACE_LEVEL not in ("metadata", "summary", "full"):
+    raise SystemExit(f"bad RR_TRACE={TRACE_LEVEL!r}: "
+                     f"expected metadata | summary | full (or unset)")
 
 
 def documents_from(result):
@@ -224,25 +240,52 @@ async def main():
     progress_fh = open(out / "progress.jsonl", "a", buffering=1)
     run_t0 = time.perf_counter_ns()
 
+    # PER-NODE TIMING (RR_TRACE).
+    #
+    # The engine emits apaevt_flow with op=begin|enter|leave|end and a
+    # `component` field — real per-node boundaries — but ONLY when the task was
+    # started with a pipelineTraceLevel, and NO event carries a timestamp. So
+    # the clock is supplied here: stamp arrival, pair enter/leave, diff.
+    # Delivery latency is common-mode across one socket and cancels in the
+    # diff. Pair by (pipe id, component) as the docs require — never by stack
+    # position, since components nest and repeat.
+    #
+    # On THIS pipe the nesting is the whole story: the engine drives
+    # frame_grabber_1 ⊃ detect_1 ⊃ preprocessor_1 ⊃ embedding_1 ⊃ response_1
+    # synchronously, so inclusive totals always indict frame_grabber_1.
+    # flow_selftime.summarize_flow subtracts the children — see that module.
+    flow_raw: list = []
+    flow_counts: collections.Counter = collections.Counter()
+
     async def on_event(ev):
         try:
-            if ev.get("event") != "apaevt_status_upload":
+            name_ev = ev.get("event")
+            if name_ev == "apaevt_status_upload":
+                b = ev.get("body") or {}
+                act = b.get("action")
+                event_actions[act] += 1
+                if act in ("complete", "error"):
+                    fp = b.get("filepath")
+                    if fp:
+                        name = Path(fp).name
+                        event_times.setdefault(name, time.perf_counter_ns())
+                        done = len(event_times)
+                        t_rel = (time.perf_counter_ns() - run_t0) / 1e9
+                        progress_fh.write(json.dumps(
+                            {"doc": name, "action": act,
+                             "t_rel_s": round(t_rel, 1), "n_done": done}) + "\n")
+                        print(f"[rrv] progress: {name} {act} "
+                              f"({done} terminal events, t+{t_rel:.0f}s)",
+                              flush=True)
                 return
-            b = ev.get("body") or {}
-            act = b.get("action")
-            event_actions[act] += 1
-            if act in ("complete", "error"):
-                fp = b.get("filepath")
-                if fp:
-                    name = Path(fp).name
-                    event_times.setdefault(name, time.perf_counter_ns())
-                    done = len(event_times)
-                    t_rel = (time.perf_counter_ns() - run_t0) / 1e9
-                    progress_fh.write(json.dumps(
-                        {"doc": name, "action": act,
-                         "t_rel_s": round(t_rel, 1), "n_done": done}) + "\n")
-                    print(f"[rrv] progress: {name} {act} "
-                          f"({done} terminal events, t+{t_rel:.0f}s)", flush=True)
+            if TRACE_LEVEL and name_ev == "apaevt_flow":
+                # Append-only, O(1), no parsing: this handler is awaited inline
+                # on the SDK receive path and blocking it closes the websocket.
+                # Everything is decoded after the run.
+                b = ev.get("body") or {}
+                flow_raw.append((time.perf_counter_ns(), b.get("id"),
+                                 b.get("op"), b.get("component")))
+                flow_counts[b.get("op")] += 1
         except Exception:
             pass
 
@@ -259,6 +302,11 @@ async def main():
     await client.connect()
     use_kwargs = dict(filepath=str(pipe_path), use_existing=True,
                       ttl=RR_PIPE_TTL_S)
+    if TRACE_LEVEL:
+        # The literal level string — 'metadata' | 'summary' | 'full'. 'full'
+        # serializes every lane write and would itself burn the CPU we are
+        # trying to attribute; 'summary' is the default to reach for.
+        use_kwargs["pipelineTraceLevel"] = TRACE_LEVEL
     if threads:
         use_kwargs["threads"] = threads
     used = await client.use(**use_kwargs)
@@ -266,11 +314,31 @@ async def main():
     print(f"[rrv] pipeline up, token={token}, threads_requested="
           f"{threads if threads else 'NONE (engine default)'}", flush=True)
 
+    # NOTE: this call is INERT and kept only because every prior run carried
+    # it. `types` wants EVENT_TYPE enum names (FLOW, TASK, ...), not wire event
+    # names, so the engine logs "Unknown event type 'apaevt_status_upload'
+    # ignored". It never mattered: upload progress is delivered unconditionally
+    # to the uploading connection. Left untouched so this change cannot perturb
+    # the established measurement path; the real subscription is add_monitor().
     try:
         await client.set_events(token, ["apaevt_status_upload"])
     except Exception as exc:
         print(f"[rrv] set_events unavailable ({type(exc).__name__}); per-doc "
               f"latency falls back to derived", flush=True)
+
+    if TRACE_LEVEL:
+        # EVENT_TYPE enum names, not wire names — this is the subscription that
+        # actually delivers apaevt_flow. Failing loudly: a silent miss here
+        # produces an empty node table that looks like "the engine has no
+        # per-node cost", which is the wrong conclusion to publish.
+        try:
+            await client.add_monitor({"token": token}, ["flow", "task"])
+            print(f"[rrv] tracing ON: pipelineTraceLevel={TRACE_LEVEL!r}, "
+                  f"subscribed flow+task", flush=True)
+        except Exception as exc:
+            print(f"[rrv] FATAL: add_monitor failed ({type(exc).__name__}: "
+                  f"{exc})", flush=True)
+            raise
 
     # Warm-start with docs DISJOINT from the measured set (list tail).
     warm_set = all_videos[n:n + warm_docs]
@@ -355,6 +423,46 @@ async def main():
         records = list(await asyncio.gather(*[one(v) for v in corpus]))
         span = (time.perf_counter_ns() - t0) / 1e9
 
+    # ---- per-node timing, derived after the run (never in the handler) ----
+    #
+    # The self-time arithmetic lives in flow_selftime.py so the same code
+    # produces the in-run table and the offline per-document/LangGraph
+    # comparison — two implementations of "subtract the children" is how the
+    # two numbers end up disagreeing. Imported lazily and only when tracing is
+    # on, so an untraced control run is byte-identical to before this change
+    # (no import, no side effects, no dependency on the module being mounted).
+    node_summary = None
+    if TRACE_LEVEL:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from flow_selftime import summarize_flow
+        node_summary = summarize_flow(flow_raw, t0, span)
+        (out / "flow_events.jsonl").write_text("".join(
+            json.dumps({"ts_ns": ts, "pipe": pid, "op": op, "component": comp})
+            + "\n" for ts, pid, op, comp in flow_raw))
+        (out / "node_timings.json").write_text(json.dumps(node_summary, indent=1))
+        print(f"[rrv] flow events: {dict(flow_counts)}", flush=True)
+        if node_summary.get("nodes"):
+            print(f"[rrv] {'node':<24}{'calls':>8}{'self s':>10}{'% self':>8}"
+                  f"{'p50 ms':>10}{'p95 ms':>10}{'max ms':>11}{'incl s':>11}",
+                  flush=True)
+            for nm, v in node_summary["nodes"].items():
+                print(f"[rrv] {nm:<24}{v['calls']:>8}{v['total_s']:>10.1f}"
+                      f"{(v['pct_of_node_time'] or 0):>8.1f}{v['p50_ms']:>10.1f}"
+                      f"{v['p95_ms']:>10.1f}{v['max_ms']:>11.1f}"
+                      f"{v['inclusive_total_s']:>11.1f}", flush=True)
+            print(f"[rrv] nested={node_summary['nested']} "
+                  f"max_depth={node_summary['max_nesting_depth']} "
+                  f"unmatched_leave={node_summary['unmatched_leave']} "
+                  f"unclosed_enter={node_summary['unclosed_enter']}"
+                  + ("  (self s is EXCLUSIVE of nested children; 'incl s' for "
+                     "the outermost node is the whole pipeline)"
+                     if node_summary["nested"] else ""), flush=True)
+            print("[rrv] 'calls' are LANE CALLS, not documents — a node gets "
+                  "several enter/leave pairs per video", flush=True)
+        else:
+            print("[rrv] WARNING: tracing was ON but no enter/leave pairs were "
+                  "captured — flow traces did not arrive", flush=True)
+
     ok_n = sum(1 for r in records if r.get("ok"))
     chunks = sum(r.get("n_chunks") or 0 for r in records)
     with open(out / "per_doc.jsonl", "w") as fh:
@@ -393,6 +501,9 @@ async def main():
             "measurement_start_epoch_ns": mono_offset_ns + t0,
             "measurement_end_epoch_ns": mono_offset_ns + t0 + int(span * 1e9),
             "envelope": "NONE — sizing run: no cpuset, engine threads unpinned",
+            "trace_level": TRACE_LEVEL,
+            "flow_ops_seen": dict(flow_counts) if TRACE_LEVEL else None,
+            "node_timings": node_summary,
         }) + "\n")
 
     print(f"[rrv] DONE mode={mode}: {ok_n}/{len(records)} ok, "

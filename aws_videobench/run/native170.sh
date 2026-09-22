@@ -16,16 +16,27 @@ cd "$(dirname "$0")/.."
 
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 N="${N:-168}"
-WARM="${WARM:-2}"
+WARM_N="${WARM:-2}"
+# WARM is overloaded: this runner uses it as a COUNT of warm videos, but
+# compose maps ${WARM} to the smoke container's /warm BIND MOUNT (the matched
+# posture's disjoint warm fixtures, docker-compose.yml). A caller that exports
+# WARM=2 would therefore make compose bind a directory literally named "2".
+# Read it into WARM_N and drop it from the environment: with WARM unset the
+# mount falls back to its ./corpus default, which is what every run so far got.
+unset WARM
 RR_MODE="${RR_MODE:-blast}"
 LG_MODE="${LG_MODE:-c170}"
 CORPUS_DIR="${CORPUS_DIR:-$HOME/bench_corpus_ami_full}"
 S3_CORPUS="s3://rocketride-benchmark-data/leela/corpus/ami_full"
 EXPECT=170
-OUT="results/native170-$STAMP"
-S3_DEST="s3://rocketride-benchmark-data/leela/videobench/native170-$STAMP/"
+RUN_NAME="${RUN_NAME:-native170-$STAMP}"
+OUT="results/$RUN_NAME"
+S3_DEST="s3://rocketride-benchmark-data/leela/videobench/$RUN_NAME/"
 export BENCH_PIPE=/pipe/benchmark_video_detect.pipe
 export BENCH_TIMEOUT_S="${BENCH_TIMEOUT_S:-21600}"
+# Which arms to run: "rr lg" (default), "rr", or "lg". An A/B of the engine
+# image only needs the RocketRide arm; running LangGraph twice measures nothing.
+NATIVE_ARMS="${NATIVE_ARMS:-rr lg}"
 AWS_BIN="$(command -v aws || echo /usr/local/bin/aws)"
 [ -x "$AWS_BIN" ] || AWS_BIN="$HOME/.local/bin/aws"
 mkdir -p "$OUT/rr" "$OUT/lg" "$CORPUS_DIR"
@@ -52,13 +63,19 @@ fi
 echo "   $(find "$CORPUS_DIR" -name '*.avi' | wc -l | tr -d ' ') videos, $(du -sh "$CORPUS_DIR" | cut -f1)"
 
 echo "== [2/6] build images"
-docker compose build rocketride langgraph smoke
+BUILD_TARGETS="smoke"
+case " $NATIVE_ARMS " in *" rr "*) BUILD_TARGETS="rocketride $BUILD_TARGETS" ;; esac
+case " $NATIVE_ARMS " in *" lg "*) BUILD_TARGETS="langgraph $BUILD_TARGETS" ;; esac
+echo "   build targets: $BUILD_TARGETS (NATIVE_ARMS=$NATIVE_ARMS, RR_LENSORT_PATCH=${RR_LENSORT_PATCH:-0})"
+docker compose build $BUILD_TARGETS
 
 ( while true; do "$AWS_BIN" s3 sync "$OUT" "$S3_DEST" --quiet 2>/dev/null || true; sleep 60; done ) &
 SYNC_PID=$!
 trap 'kill $SYNC_PID 2>/dev/null || true' EXIT
 
-echo "== [3/6] ARM 1: RocketRide ($RR_MODE, $N docs + $WARM warm, unpinned)"
+rc_rr=0
+if case " $NATIVE_ARMS " in *" rr "*) true;; *) false;; esac; then
+echo "== [3/6] ARM 1: RocketRide ($RR_MODE, $N docs + $WARM_N warm, unpinned)"
 docker compose up -d rocketride
 for i in $(seq 1 60); do
   [ "$(docker inspect -f '{{.State.Health.Status}}' videobench-rocketride 2>/dev/null)" = "healthy" ] && break
@@ -68,14 +85,17 @@ done
 RR_SAMPLER=$(sampler videobench-rocketride "$OUT/rr/engine_cgroup.csv")
 rc_rr=0
 CORPUS="$CORPUS_DIR" docker compose run --rm smoke \
-  python /bench/bench_video.py /corpus "/results/native170-$STAMP/rr" "$N" "$RR_MODE" "$WARM" \
+  python /bench/bench_video.py /corpus "/results/$RUN_NAME/rr" "$N" "$RR_MODE" "$WARM_N" \
   > "$OUT/rr/driver.log" 2>&1 || rc_rr=$?
 kill "$RR_SAMPLER" 2>/dev/null || true
 docker compose logs --no-color rocketride > "$OUT/rr/service.log" 2>&1 || true
 docker compose stop rocketride && docker compose rm -f rocketride
 echo "   RR done (rc=$rc_rr)"
+fi
 
-echo "== [4/6] ARM 2: LangGraph ($LG_MODE, $N docs + $WARM warm, unpinned)"
+rc_lg=0
+if case " $NATIVE_ARMS " in *" lg "*) true;; *) false;; esac; then
+echo "== [4/6] ARM 2: LangGraph ($LG_MODE, $N docs + $WARM_N warm, unpinned)"
 docker compose up -d langgraph
 for i in $(seq 1 90); do
   [ "$(docker inspect -f '{{.State.Health.Status}}' videobench-langgraph 2>/dev/null)" = "healthy" ] && break
@@ -85,16 +105,23 @@ done
 LG_SAMPLER=$(sampler videobench-langgraph "$OUT/lg/engine_cgroup.csv")
 rc_lg=0
 CORPUS="$CORPUS_DIR" docker compose run --rm smoke \
-  python /bench/lg_driver.py /corpus "/results/native170-$STAMP/lg" "$N" "$LG_MODE" "$WARM" \
+  python /bench/lg_driver.py /corpus "/results/$RUN_NAME/lg" "$N" "$LG_MODE" "$WARM_N" \
   > "$OUT/lg/driver.log" 2>&1 || rc_lg=$?
 kill "$LG_SAMPLER" 2>/dev/null || true
 docker compose logs --no-color langgraph > "$OUT/lg/service.log" 2>&1 || true
 docker compose down
+fi
 echo "   LG done (rc=$rc_lg)"
 
 echo "== [5/6] report"
 rc_rep=0
-python3 bench/report.py --arms "$OUT/rr" "$OUT/lg" > "$OUT/report.txt" 2>&1 || rc_rep=$?
+if [ -f "$OUT/rr/per_doc.jsonl" ] && [ -f "$OUT/lg/per_doc.jsonl" ]; then
+  python3 bench/report.py --arms "$OUT/rr" "$OUT/lg" > "$OUT/report.txt" 2>&1 || rc_rep=$?
+elif [ -f "$OUT/rr/per_doc.jsonl" ]; then
+  python3 bench/report.py "$OUT/rr" > "$OUT/report.txt" 2>&1 || rc_rep=$?
+elif [ -f "$OUT/lg/per_doc.jsonl" ]; then
+  python3 bench/report.py "$OUT/lg" > "$OUT/report.txt" 2>&1 || rc_rep=$?
+else echo "no arm produced records" > "$OUT/report.txt"; rc_rep=1; fi
 cat "$OUT/report.txt"
 
 echo "== [6/6] final sync"

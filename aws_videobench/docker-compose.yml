@@ -13,6 +13,9 @@ services:
     build:
       context: ./arms/rocketride
       dockerfile: Dockerfile
+      args:
+        # PR #2197 length-sorted embedding batching. 0 = stock, 1 = patched.
+        RR_LENSORT_PATCH: "${RR_LENSORT_PATCH:-0}"
     image: videobench-rocketride:3.3.1
     platform: linux/amd64
     container_name: videobench-rocketride
@@ -107,6 +110,10 @@ services:
       # default pool (how every video run before 2026-08-20 ran). Requested
       # is not activated — effective cores come from the cgroup sampler.
       RR_THREADS: "${RR_THREADS:-}"
+      # Per-node timing via the engine's own apaevt_flow traces
+      # (metadata|summary|full). Empty = off, which is what every throughput
+      # run must use: the control for a traced run is the same driver unset.
+      RR_TRACE: "${RR_TRACE:-}"
     volumes:
       - "${CORPUS:-./corpus}:/corpus:ro"
       - "${WARM:-./corpus}:/warm:ro"       # matched posture: disjoint warm fixtures
@@ -136,21 +143,24 @@ services:
     command: ["python", "serve8.py"]
     mem_limit: 58g
     environment:
-      OMP_NUM_THREADS: "4"
-      MKL_NUM_THREADS: "4"
-      OPENBLAS_NUM_THREADS: "4"
-      VECLIB_MAXIMUM_THREADS: "4"
-      NUMEXPR_NUM_THREADS: "4"
-      TORCH_NUM_THREADS: "4"
-      LG_TORCH_THREADS: "4"
+      # Parameterised for the config sweep: W processes x T torch threads, one
+      # port each. Defaults reproduce the original 8x4 matched cell.
+      OMP_NUM_THREADS: "${LG_TORCH_THREADS:-4}"
+      MKL_NUM_THREADS: "${LG_TORCH_THREADS:-4}"
+      OPENBLAS_NUM_THREADS: "${LG_TORCH_THREADS:-4}"
+      VECLIB_MAXIMUM_THREADS: "${LG_TORCH_THREADS:-4}"
+      NUMEXPR_NUM_THREADS: "${LG_TORCH_THREADS:-4}"
+      TORCH_NUM_THREADS: "${LG_TORCH_THREADS:-4}"
+      LG_TORCH_THREADS: "${LG_TORCH_THREADS:-4}"
       LG_TORCH_INTEROP: "1"
-      LG_DETECT_CONCURRENCY_PER_PROCESS: "1"
-      LG_WORKERS: "8"
-      LG_PORT_BASE: "8201"
+      LG_DETECT_CONCURRENCY_PER_PROCESS: "${LG_EXPECT_DETECT_CONC:-1}"
+      LG_WORKERS: "${LG_WORKERS:-8}"
+      LG_PORT_BASE: "${LG_PORT_BASE:-8201}"
+      LG_THREAD_LIMIT: "${LG_THREAD_LIMIT:-0}"
       MALLOC_ARENA_MAX: "2"
     healthcheck:
       test: ["CMD", "python", "-c",
-             "import urllib.request,sys; [urllib.request.urlopen(f'http://127.0.0.1:{p}/health/ready',timeout=3) for p in range(8201,8209)]"]
+             "import os,urllib.request; b=int(os.environ.get('LG_PORT_BASE','8201')); n=int(os.environ.get('LG_WORKERS','8')); [urllib.request.urlopen(f'http://127.0.0.1:{p}/health/ready',timeout=3) for p in range(b,b+n)]"]
       interval: 15s
       timeout: 10s
       retries: 120
@@ -205,6 +215,7 @@ services:
       LG_TORCH_THREADS: "${LG_TORCH_THREADS:-5}"
       LG_TORCH_INTEROP: "1"
       LG_DETECT_CONCURRENCY_PER_PROCESS: "${LG_EXPECT_DETECT_CONC:-6}"
+      LG_THREAD_LIMIT: "${LG_THREAD_LIMIT:-0}"
       LG_PORT: "8200"
       MALLOC_ARENA_MAX: "2"
 
