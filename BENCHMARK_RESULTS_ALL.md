@@ -69,6 +69,7 @@ not folded into these tables.
    - 6.8 Films with both arms tuned (3–5 Sep)
    - 6.9 PR #2197 video A/B (7 Sep)
    - 6.10 Cross-cutting video results and findings
+   - 6.11 Node-level attribution on AMI, both arms: the bottleneck is the detect node, and it is a queue (22 Sep)
 7. [Cross-track synthesis](#7-cross-track-synthesis)
 8. [Appendix A — S3 run index](#appendix-a--s3-run-index)
 9. [Appendix B — where the source documents live](#appendix-b--where-the-source-documents-live)
@@ -185,6 +186,7 @@ Warm-up documents are always disjoint from, and excluded from, the measured set.
 | 21 Sep 13:36 | PDF | `…/batch10k-paired-b{16,32,64}-20260921T075403Z` | paired cross-arm reports, assembled from copies | 8,504 / 9,913 byte-identical at every batch size — the same 1,409-document transposition set as Runs 1 and 11 |
 | 22 Sep 02:27 | PDF | `nodeprofile-2026-09-21/nodeprofile-{traced,control}-smoke20260922T022724Z` | per-node tracing switched on for the first time, plus its perturbation control | tracing costs 0.5%; **parse 10.2× LangGraph, embed 1.00×** on identical documents |
 | 22 Sep 02:44 | PDF | `nodeprofile-2026-09-21/pathology-20260922T024429Z` | six documents sequentially, per-document node attribution | **99.98% of the worst document's 1,565 s is the parse node**; 3.01 MB control parses in 2.4 s |
+| 22 Sep 21:48 | video | `nodeprofile-ami-2026-09-22/nodeprofile-ami-{rr-traced,lg,rr-seq,lg-seq}-20260922T214831Z` | node-level attribution on AMI, both arms, 24 videos batched + 6 sequential | **detect is 95% of RocketRide's node time and a queue**: CPU/frame matches LangGraph within 9%, but detect wall/frame inflates 20× under load for +10% throughput; embedding within 22% |
 
 ---
 
@@ -1140,6 +1142,100 @@ hypothesis, unverified). The publishable campaign (cpuset envelope with driver, 
 and keepalive outside it; ≥ 3 reps with alternating arm order; medians with spread;
 determinism exercised) has not been run on either corpus.
 
+### 6.11 Node-level attribution on AMI, both arms: the bottleneck is the detect node, and it is a queue (22 Sep)
+
+The PDF method of §5.9 applied to video, both arms, same videos, default posture on
+both (RocketRide one task / `threads` unset / its native batch; LangGraph one process /
+c32), unpinned as every AMI run has been. RocketRide's video driver gained the same
+`RR_TRACE` mechanism (`abbd224`); LangGraph's per-node timings were already recorded on
+every video and had never been compared node for node. Built by two Opus subagents
+under Fable orchestration, verified against a fake SDK including a proof that the
+driver is byte-identical with tracing off. Four cells: RocketRide traced on 24
+meetings (17.9 h), LangGraph on the same 24, then six room-diverse videos one at a time
+on each arm — two dense Idiap rooms (IN1007, IN1016), two sparse ES rooms (ES2002a,
+ES2016d), the 88-minute EN2001a, and TS3009c. The video control cell was skipped at
+Leela's request; the PDF calibration (tracing costs 0.5%) stands, and the traced cell's
+39.9× realtime sits inside the 35–41× band of every prior default-posture run.
+
+**The same nesting trap, one level deeper.** The video chain nests five deep —
+`frame_grabber_1 ⊃ detect_1 ⊃ preprocessor_1 ⊃ embedding_1 ⊃ response_1` — so the raw
+inclusive numbers hand the whole pipeline to the frame grabber. Everything below is
+exclusive self time from `bench/flow_selftime.py`.
+
+#### Six videos, one at a time, both arms — the clean comparison
+
+| stage | RocketRide | LangGraph | ratio | RR s/video | LG s/video |
+|---|---:|---:|---:|---:|---:|
+| frame_grabber / frames | 2.5 s | 100.6 s | 0.02× | 0.42 | 16.77 |
+| **detect** | **371.8 s** | **109.8 s** | **3.39×** | **61.96** | **18.30** |
+| preprocessor / chunk | 0.1 s | 0.1 s | — | 0.02 | 0.01 |
+| embedding | 15.8 s | 13.0 s | 1.22× | 2.64 | 2.17 |
+| **total** | 390.2 s | 223.5 s | 1.75× | 65.0 | 37.3 |
+
+RocketRide's node share: **detect 95.2%**, embedding 4.1%, frame grabber 0.6%.
+LangGraph's: detect 49%, frames 45%, embed 6%. Per video, both arms:
+
+| video | chunks | RR detect | RR embed | RR grabber | LG frames | LG detect | LG embed |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| IN1016 (dense) | 319 | 89.3 | 6.00 | 0.45 | 23.6 | 26.4 | 4.89 |
+| EN2001a (88 min) | 52 | 89.3 | 0.96 | 0.46 | 24.3 | 27.0 | 0.83 |
+| TS3009c | 138 | 64.2 | 2.53 | 0.43 | 17.7 | 18.7 | 2.25 |
+| IN1007 (dense) | 294 | 60.0 | 5.48 | 0.44 | 16.5 | 17.5 | 4.24 |
+| ES2016d (sparse) | 20 | 38.3 | 0.38 | 0.35 | 10.4 | 11.1 | 0.38 |
+| ES2002a (sparse) | 24 | 30.7 | 0.47 | 0.37 | 8.2 | 9.1 | 0.43 |
+
+Embedding tracks chunk count on both arms and agrees within 22% — as on PDF, the encoder
+is not in question. Chunking is free on both.
+
+#### What the CPU says the wall time means
+
+| cell | span | frames/s | ×RT | cores | **CPU-s / frame** |
+|---|---:|---:|---:|---:|---:|
+| RocketRide, 24 at once | 1,615 s | 2.66 | 39.9 | 5.43 | **2.04** |
+| LangGraph, 24 at once | 389 s | 11.03 | 165.4 | 23.81 | **2.16** |
+| RocketRide, one at a time | 413 s | 2.41 | 36.1 | 5.26 | **2.19** |
+| LangGraph, one at a time | 228 s | 4.37 | 65.5 | 8.77 | **2.01** |
+
+**CPU per frame is the same on both arms, in both modes, within 9%.** The per-frame
+work is identical. RocketRide's detect takes 3.4× LangGraph's wall time per video
+because it runs on 5.3 cores while LangGraph's runs on 8.8 with one video in flight —
+and RocketRide's core count does not move when 24 videos are offered (5.26 → 5.43).
+
+#### The bottleneck, measured at the node
+
+| detect_1 wall time per frame | one video in flight | 24 videos in flight | inflation | throughput gained |
+|---|---:|---:|---:|---:|
+| RocketRide | 0.374 s | **7.38 s** | **19.7×** | +10% (36.1 → 39.9×) |
+| LangGraph | 0.110 s | 1.46 s | 13.3× | +152% (65.5 → 165.4×) |
+
+Under load RocketRide's detect node spends ~7 s per frame **waiting** and ~0.37 s
+computing: with 24 videos in flight, ~20 detect calls sit open at any instant behind
+the one that holds the per-task device lock (`nodes/detect/IGlobal.py:81`,
+`IInstance.py:106`). LangGraph's detect also inflates under load, but that is CPU
+contention while saturating 24 cores, and it buys 2.5× throughput; RocketRide's is lock
+contention that leaves 26 cores idle and buys 10%. The 4.15× span gap between the two
+24-video cells is the same 4.16× as Run C, now with a node and a mechanism attached.
+
+**So on video the node is `detect_1`, and the bottleneck is serialization at that node,
+not the work inside it — the opposite shape from PDF, where the node (`parse_1`) does
+10× more work per document.** The `threads=` knob cannot help (it bounds in-flight
+items, not inferences), which is why the 24 Aug thread sweep was flat; the multi-task
+posture can, which is why 8 tasks reached 24 cores in §6.5.
+
+**One thing not settled.** RocketRide's frame grabber shows 0.42 s of self time per
+video against LangGraph's 16.8 s of single-threaded ffmpeg — 2.5 ms per output frame,
+which cannot be a full decode of 15 s of DivX. Yet CPU per frame matches LangGraph, so
+the decode cost is real and lands somewhere other than the grabber's own window: most
+likely lazily inside the detect call, or on the engine's reader thread outside any
+traced lane call. It is not a bottleneck on AMI either way (the totals say so), but on
+the films corpus — where §6.8 inferred a 2.8× decode penalty by subtraction — the same
+traced run would settle whether that penalty is decode or something else.
+
+**Records.** `s3://rocketride-benchmark-data/leela/videobench/nodeprofile-ami-2026-09-22/`
+— `nodeprofile-ami-{rr-traced,lg,rr-seq,lg-seq}-20260922T214831Z/` and
+`nodeprofile-ami-analysis-20260922T214831Z/` (`selftime_*.txt/json`, paired report).
+Harness: `08e30df` (checkpoint of prior uncommitted video work), `abbd224`.
+
 ---
 
 ## 7. Cross-track synthesis
@@ -1226,6 +1322,7 @@ model hashes), and per arm `per_doc.jsonl`, `manifest.json`, `engine_cgroup.csv`
 | `bench/batch10k-lg-2026-09-21/batch10k-lg-b{16,32,64}-20260921T075403Z` | PDF | the same three batch sizes on LangGraph, waves of B joined at a barrier (§5.8) |
 | `bench/batch10k-lg-2026-09-21/batch10k-paired-b{16,32,64}-20260921T075403Z` | PDF | assembled cross-arm reports, one per batch size; `PAIRING.md` states what was copied from where |
 | `bench/nodeprofile-2026-09-21/` | PDF | node-level attribution (§5.9): traced + control bulk cells and the per-document pathology run; traced cells carry `flow_events.jsonl` and `node_timings.json` |
+| `videobench/nodeprofile-ami-2026-09-22/` | video | node-level attribution on AMI, both arms (§6.11): traced RR + LG on 24 videos, six videos sequentially on each arm, and the `analysis` dir with the self-time tables and the paired report |
 | `bench/micro2197-20260909T071851Z` | PDF | `encode()` microbench (`out/{stock,patched}/results.json`, scripts, embeddings `.npy`, `chunks_1k.jsonl`); `…071314Z` = aborted first attempt (logs only) |
 | `corpus/ami30h/`, `corpus/archive_films/`, `corpus/archive_films_v2/` | video | staged corpora (sha-pinned manifests) |
 | `videobench/smoke-20260819T191632Z` | video | dual-lane smoke (`smoke_result.json`, `docs_rep{1,2}.json`) |
