@@ -83,16 +83,21 @@ def posture_gates(meta):
                          f"{len(c.get('new_task_pids') or [])}/{k} task processes, "
                          f"{len(set(c.get('project_ids') or []))} project ids, environ "
                          f"readback for {len(c.get('environ_readback') or {})}"))
-    elif p.startswith("lg_matched"):
+    elif p.startswith("lg_matched") or p.startswith("lg_inproc"):
+        # The gate asserts the posture that was ASKED FOR, read back from the
+        # live service — not a fixed value. (It hardcoded 1 for the original
+        # 8x4 cell, which failed every config-sweep cell that sets it higher.)
         rb = meta.get("worker_readbacks") or []
         w = meta.get("workers")
+        exp = (meta.get("provenance") or {}).get("detect_concurrency_per_process")
         pids = {m.get("pid") for m in rb}
         ok = (len(rb) == w and len(pids) == w and None not in pids
               and all((m.get("torch") or {}).get("num_interop_threads") == 1 for m in rb)
-              and all(m.get("detect_concurrency_per_process") == 1 for m in rb))
+              and (exp is None
+                   or all(m.get("detect_concurrency_per_process") == exp for m in rb)))
         out.append(v0._g("worker_census", "PASS" if ok else "FAIL",
-                         f"{len(pids)}/{w} distinct worker pids with torch/interop/"
-                         f"detect-concurrency readbacks"))
+                         f"{len(pids)}/{w} distinct worker pids, detect-concurrency "
+                         f"{exp}/process, interop 1 — all read back from /meta"))
     return out
 
 

@@ -28,6 +28,9 @@ _ready = False
 _PORT = os.environ.get("LG_PORT", "8200")
 _TORCH_THREADS = os.environ.get("LG_TORCH_THREADS")
 _TORCH_INTEROP = os.environ.get("LG_TORCH_INTEROP")
+# anyio's default worker pool is 40 threads, which silently caps in-flight
+# graph runs in ONE process. 0/unset = leave the default alone.
+_THREAD_LIMIT = int(os.environ.get("LG_THREAD_LIMIT", "0") or 0)
 _ckpt_hashes: dict = {}
 
 
@@ -83,6 +86,8 @@ def _warmup():
 async def lifespan(app: FastAPI):
     global _graph
     _configure_torch()
+    if _THREAD_LIMIT:
+        anyio.to_thread.current_default_thread_limiter().total_tokens = _THREAD_LIMIT
     _graph = build_video_graph()
     _warmup()
     _checkpoint_hashes()

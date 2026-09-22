@@ -92,8 +92,25 @@ RUN if [ "$RR_DUP_PATCH" = "1" ]; then \
       && echo "BUG_CHUNK_DUPLICATION patch applied to $F"; \
     else echo "BUG_CHUNK_DUPLICATION patch SKIPPED (stock 3.3.1)"; fi
 
+# ---------------------------------------------------------------------------
+# PR #2197 — fix(embedding): batch sentences by length so padding stops wasting
+# compute. _encode_local batched in arrival order while tokenization pads every
+# batch to its longest member, so one long chunk made the rest of its batch pay
+# the long one's cost. Upstream sentence-transformers sorts by length first;
+# this build did not. Stepan's measured gains scale with sentences per encode()
+# call: -1% at 16, +30% at 64, +70% at 256. Our AMI docs carry ~85 chunks each.
+#
+# OFF by default so the stock image is unchanged; set RR_LENSORT_PATCH=1 to
+# build the A/B comparison image.
+ARG RR_LENSORT_PATCH=0
+COPY patches/lensort_2197.py /tmp/lensort_2197.py
+RUN if [ "$RR_LENSORT_PATCH" = "1" ]; then \
+      python3 /tmp/lensort_2197.py "$ENGINE_DIR"; \
+    else echo "PR2197 length-sorted batching SKIPPED (arrival-order batching)"; fi
+
 LABEL benchmark.rocketride.engine_version="3.3.1" \
       benchmark.rocketride.duplication_patch="preventDefault-after-embedding-flush" \
+      benchmark.rocketride.lensort_patch_pr2197="${RR_LENSORT_PATCH}" \
       benchmark.rocketride.workload="video"
 # ---------------------------------------------------------------------------
 

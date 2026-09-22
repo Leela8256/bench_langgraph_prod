@@ -25,10 +25,12 @@ ARM_ORDER="${ARM_ORDER:-rr lg}"
 N="${N:-168}"
 NWARM=2
 SRC="${SRC:-$HOME/bench_corpus_ami_full}"
-PIN=corpus/sets/ami_full.txt
-M8="$HOME/bench_corpus_ami_m8"
+PIN="${PIN:-corpus/sets/ami_full.txt}"
+M8="${M8:-$HOME/bench_corpus_ami_m8}"
+# Corpus shape: AMI pins are bare ids + .avi; films pins are "id<TAB>file.mp4".
+CORPUS_EXT="${CORPUS_EXT:-.avi}"
 RR_TASKS="${RR_TASKS:-8}"; RR_BLAS_THREADS="${RR_BLAS_THREADS:-4}"
-RUN="matched${RR_TASKS}x${RR_BLAS_THREADS}-ami-rep$REP-$STAMP"
+RUN="${RUN_NAME:-matched${RR_TASKS}x${RR_BLAS_THREADS}-ami-rep$REP-$STAMP}"
 OUT="results/$RUN"
 S3_DEST="s3://rocketride-benchmark-data/leela/videobench/$RUN/"
 export BENCH_PIPE=/pipe/benchmark_video_detect.pipe
@@ -121,12 +123,20 @@ echo "== [1/6] quiet-box preflight"
 load=$(cut -d' ' -f1 /proc/loadavg); echo "   load1=$load (keepalive contributes ~1.0)"
 
 echo "== [2/6] corpus: AMI first $N measured (committed order) + last $NWARM as disjoint warm"
-[ -f "$SRC/corpus_manifest.json" ] || { echo "FATAL: no AMI manifest in $SRC" >&2; exit 1; }
-python3 - "$PIN" "$SRC" "$M8" "$N" "$NWARM" <<'PY'
+[ -f "$SRC/corpus_manifest.json" ] || { echo "FATAL: no corpus manifest in $SRC" >&2; exit 1; }
+python3 - "$PIN" "$SRC" "$M8" "$N" "$NWARM" "$CORPUS_EXT" <<'PY'
 import json, os, sys
 pin, src, m8, n, nwarm = sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4]), int(sys.argv[5])
-ids = [l.strip() for l in open(pin) if l.strip() and not l.startswith("#")]
-docs = [f"{i}.avi" for i in ids]
+ext = sys.argv[6] if len(sys.argv) > 6 else ".avi"
+docs = []
+for line in open(pin):
+    line = line.strip()
+    if not line or line.startswith("#"):
+        continue
+    # Column 1 is the archive id and matches the manifest key stem exactly.
+    # Column 2 is the UPSTREAM archive.org source filename and differs from the
+    # staged filename for 213 of the 500 films — do not use it.
+    docs.append(line.split("\t")[0] + ext)
 assert len(docs) >= n + nwarm, f"pin has {len(docs)} docs, need {n + nwarm}"
 measured, warm = docs[:n], docs[-nwarm:]
 assert not set(measured) & set(warm)
@@ -137,7 +147,7 @@ for sub, names in (("measured", measured), ("warm", warm)):
         assert os.path.exists(s), f"missing on disk: {nm}"
         if not os.path.exists(t): os.link(s, t)
     for extra in os.listdir(d):
-        if extra.endswith(".avi") and extra not in names:
+        if extra.endswith(ext) and extra not in names:
             os.unlink(os.path.join(d, extra))
 open(os.path.join(m8, "measured", "measured_order.txt"), "w").write("\n".join(measured) + "\n")
 m = json.load(open(os.path.join(src, "corpus_manifest.json")))
@@ -147,7 +157,7 @@ vd = m.get("video_duration_s", {})
 print(f"   measured {len(measured)} docs, {sum(vd.get(d, 0) for d in measured)/3600:.2f} h probed; warm {warm}")
 PY
 echo "== [3/6] hash verification of measured files (once, before either arm)"
-( cd "$M8/measured" && ls *.avi | xargs -P 8 -n 1 sha256sum ) > "$OUT/preflight_hashes.txt"
+( cd "$M8/measured" && xargs -P 8 -n 1 sha256sum < measured_order.txt ) > "$OUT/preflight_hashes.txt"
 python3 - "$M8/measured/corpus_manifest.json" "$OUT/preflight_hashes.txt" "$M8/measured" "$OUT/preflight_hashes.json" <<'PY'
 import json, os, sys
 m = json.load(open(sys.argv[1])); shas = m["sha256"]; ok, bad = {}, []
@@ -163,7 +173,14 @@ print(f"   {len(ok)} files verified against the AMI manifest")
 PY
 
 echo "== [4/6] build + provenance"
-docker compose build rocketride langgraph smoke
+# Build only the arms this run actually uses. A RocketRide-only campaign must not
+# be blocked by a LangGraph image rebuild (torch + CUDA, ~6 GB) — that crashed the
+# 2026-09-02 rr_best_configs launch with a buildkit RPC EOF on a target it never ran.
+BUILD_TARGETS="smoke"
+case " $ARM_ORDER " in *" rr "*) BUILD_TARGETS="rocketride $BUILD_TARGETS" ;; esac
+case " $ARM_ORDER " in *" lg "*|*" lg1 "*|*" lgip "*) BUILD_TARGETS="langgraph $BUILD_TARGETS" ;; esac
+echo "   build targets: $BUILD_TARGETS  (ARM_ORDER=$ARM_ORDER)"
+docker compose build $BUILD_TARGETS
 PROV="$OUT/provenance"
 { git rev-parse HEAD; git describe --always --dirty 2>/dev/null || true; } > "$PROV/git_state.txt" 2>/dev/null || true
 { uname -a; nproc; lscpu 2>/dev/null | head -12; docker compose version; } > "$PROV/host.txt" || true
