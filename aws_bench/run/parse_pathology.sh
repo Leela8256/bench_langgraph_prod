@@ -26,14 +26,18 @@ CUR="${CUR:-$HOME/bench_corpus_pathology}"
 
 # Sorted order matters: the driver takes all_pdfs[:N] as measured and the next
 # WARM as warm-up, so the measured set must sort first and the warm files after.
-MEASURED="000009.pdf 011464.pdf 011730.pdf 012852.pdf 039660.pdf"
-#   000009  small control
-#   011464  1.31 MB, 3 chunks   RR 725 s    LG 0.99 s
-#   011730  1.20 MB, 7 chunks   RR 335 s    LG 1.10 s
-#   012852  1.91 MB, 1959 chunks RR 232 s   LG 217 s   <- text-heavy control: the
-#           one document where the two arms AGREE, so it anchors the comparison
-#   039660  3.32 MB, 3 chunks   RR 1677 s   LG 1.73 s  <- the 970x case
-N_MEASURED=5
+MEASURED="001029.pdf 001030.pdf 011464.pdf 011730.pdf 012852.pdf 039660.pdf"
+#   001029  3.01 MB             <- SIZE-MATCHED control for 039660 (3.16 MB). If a
+#           3 MB ordinary PDF parses in seconds while a 3 MB near-empty one takes
+#           28 minutes, file size is eliminated as the variable.
+#   001030  0.05 MB             <- floor: what a trivial document costs
+#   011464  1.25 MB, 3 chunks   RR 725 s    LG 0.99 s
+#   011730  1.15 MB, 7 chunks   RR 335 s    LG 1.10 s
+#   012852  1.83 MB, 1959 chunks RR 232 s   LG 217 s   <- text-heavy anchor: the one
+#           document where the two arms AGREE. A clean result shows the pathology
+#           on the near-empty files and NOT on this one.
+#   039660  3.16 MB, 3 chunks   RR 1677 s   LG 1.73 s  <- the 970x case
+N_MEASURED=6
 WARM_N=2
 
 [ -d "$SRC" ] || { echo "FATAL: source corpus $SRC not found"; exit 1; }
