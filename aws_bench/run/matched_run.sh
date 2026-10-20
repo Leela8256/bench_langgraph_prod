@@ -110,7 +110,8 @@ have=$(find "$CORPUS" -name '*.pdf' | wc -l | tr -d ' ')
   echo "timeout_s=$BENCH_TIMEOUT_S"; echo "client=containerized (bench-client)"
   echo "lg_extractor=$LG_EXTRACTOR"
   echo "rr_threads=${RR_THREADS:-NONE (engine default)}"
-  echo "rr_dup_patch=$RR_DUP_PATCH"; echo "rr_engine_version=3.3.1"
+  echo "rr_dup_patch=$RR_DUP_PATCH"; echo "rr_engine_version=${ENGINE_VERSION:-3.3.1}"
+  echo "rr_engine_url=${ENGINE_URL:-release 3.3.1}"; echo "rr_parse_stock_url=${PARSE_STOCK_URL:-none}"
   echo "rr_sdk_version=1.3.0"
 } > "$RUN/environment.txt"
 cp "$CORPUS/SHA256SUMS" "$RUN/corpus.sha256"
@@ -137,7 +138,7 @@ BUILD_ARMS=""
 [ -n "$BUILD_ARMS" ] || { echo "FATAL: SKIP_LG=1 and SKIP_RR=1 leaves no arm to run"; exit 1; }
 docker compose build --build-arg RR_DUP_PATCH="$RR_DUP_PATCH" \
   --build-arg RR_LENSORT_PATCH="${RR_LENSORT_PATCH:-0}" \
-  $BUILD_ARMS 2>&1 | tail -6
+  $BUILD_ARMS 2>&1 | tail -12
 docker compose --profile client build bench 2>&1 | tail -3
 for i in $BUILD_ARMS; do
   docker image inspect "bench-$i:latest" --format "$i {{.Id}} {{.Architecture}}" \

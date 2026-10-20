@@ -74,6 +74,13 @@ services:
       dockerfile: Dockerfile
       args:
         RR_LENSORT_PATCH: "${RR_LENSORT_PATCH:-0}"
+        # Engine under test; defaults in the Dockerfile (3.3.1). Set
+        # ENGINE_VERSION/ENGINE_URL/ENGINE_SHA256 (empty = unverified) and
+        # PARSE_STOCK_URL (parse-node A/B control) in the environment.
+        ENGINE_VERSION: "${ENGINE_VERSION:-3.3.1}"
+        ENGINE_URL: "${ENGINE_URL:-https://github.com/rocketride-org/rocketride-server/releases/download/server-v3.3.1/rocketride-server-v3.3.1-linux-x64.tar.gz}"
+        ENGINE_SHA256: "${ENGINE_SHA256-95768e2640df2d34dd6dfea2e456f36da03ad80b091f9d057c116dfe748d9747}"
+        PARSE_STOCK_URL: "${PARSE_STOCK_URL:-}"
     image: bench-rocketride:latest
     platform: linux/amd64
     container_name: bench-rocketride

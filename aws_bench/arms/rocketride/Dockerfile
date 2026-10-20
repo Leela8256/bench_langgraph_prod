@@ -29,6 +29,9 @@ ENV ENGINE_DIR=/opt/rocketride/engine \
 # the extracted linux-x64 `engine` binary, verified 2026-08-14.
 ARG ENGINE_VERSION=3.3.1
 ARG ENGINE_URL=https://github.com/rocketride-org/rocketride-server/releases/download/server-v3.3.1/rocketride-server-v3.3.1-linux-x64.tar.gz
+# Empty ENGINE_SHA256 = do not verify, print the hash instead (experimental
+# releases whose binary hash is not known before the first pull). Provenance
+# still records the hash the container actually ran (engine_sha.txt).
 ARG ENGINE_SHA256=95768e2640df2d34dd6dfea2e456f36da03ad80b091f9d057c116dfe748d9747
 
 RUN mkdir -p "$ENGINE_DIR" \
@@ -43,8 +46,35 @@ RUN mkdir -p "$ENGINE_DIR" \
          [ -n "$inner" ] && mv "$(dirname "$inner")"/. "$ENGINE_DIR"/ 2>/dev/null || true; \
        fi \
     && test -f "$ENGINE_DIR/engine" && test -f "$ENGINE_DIR/ai/eaas.py" \
-    && echo "${ENGINE_SHA256}  ${ENGINE_DIR}/engine" | sha256sum -c - \
+    && if [ -n "$ENGINE_SHA256" ]; then \
+         echo "${ENGINE_SHA256}  ${ENGINE_DIR}/engine" | sha256sum -c -; \
+       else echo "ENGINE_SHA256 not pinned; extracted engine binary:"; sha256sum "$ENGINE_DIR/engine"; fi \
     && chmod +x "$ENGINE_DIR/engine"
+
+# ---------------------------------------------------------------------------
+# Parse-node A/B (issue #2745 / PR #2746). PARSE_STOCK_URL names a second
+# release tarball whose parse node (nodes/parse/libparse.so and
+# java/lib/rocketride-parse.jar) REPLACES the one in ENGINE_URL, so the
+# control arm runs the identical engine with only the parse node swapped.
+# Empty = keep the parse node the engine tarball shipped.
+ARG PARSE_STOCK_URL=
+RUN if [ -n "$PARSE_STOCK_URL" ]; then \
+      mkdir -p /tmp/parse_stock \
+      && curl -fsSL --retry 3 "$PARSE_STOCK_URL" -o /tmp/parse_stock.tgz \
+      && tar -xzf /tmp/parse_stock.tgz -C /tmp/parse_stock \
+           --wildcards '*nodes/parse/libparse.so' '*java/lib/rocketride-parse.jar' \
+      && SO="$(find /tmp/parse_stock -name libparse.so | head -1)" \
+      && JAR="$(find /tmp/parse_stock -name rocketride-parse.jar | head -1)" \
+      && test -n "$SO" && test -n "$JAR" \
+      && test -f "$ENGINE_DIR/nodes/parse/libparse.so" && test -f "$ENGINE_DIR/java/lib/rocketride-parse.jar" \
+      && cp "$SO" "$ENGINE_DIR/nodes/parse/libparse.so" \
+      && cp "$JAR" "$ENGINE_DIR/java/lib/rocketride-parse.jar" \
+      && rm -rf /tmp/parse_stock /tmp/parse_stock.tgz \
+      && echo "parse node REPLACED from $PARSE_STOCK_URL" \
+      && sha256sum "$ENGINE_DIR/nodes/parse/libparse.so" "$ENGINE_DIR/java/lib/rocketride-parse.jar"; \
+    else echo "parse node: as shipped in the engine tarball"; \
+      sha256sum "$ENGINE_DIR/nodes/parse/libparse.so" "$ENGINE_DIR/java/lib/rocketride-parse.jar" 2>/dev/null || true; fi
+LABEL benchmark.rocketride.parse_stock_url="${PARSE_STOCK_URL}"
 
 # ---------------------------------------------------------------------------
 # WORKAROUND for a RocketRide engine bug (present in 3.3.0 AND 3.3.1).
@@ -130,7 +160,8 @@ RUN if [ "$RR_LENSORT_PATCH" = "1" ]; then \
 
 LABEL benchmark.rocketride.lensort_patch_pr2197="${RR_LENSORT_PATCH}"
 
-LABEL benchmark.rocketride.engine_version="3.3.1" \
+LABEL benchmark.rocketride.engine_version="${ENGINE_VERSION}" \
+      benchmark.rocketride.engine_url="${ENGINE_URL}" \
       benchmark.rocketride.duplication_patch="preventDefault-after-embedding-flush"
 # ---------------------------------------------------------------------------
 
